@@ -151,7 +151,8 @@ class GetNextQuestionView(APIView):
                 correct_count = responses.filter(correct=True).count()
                 session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
                 
-                domain_map = {'reading': 0, 'writing': 0, 'math': 1, 'attention': 2, 'focus': 2}
+                # Only 3 domains for assessment: reading, math, attention
+                domain_map = {'reading': 0, 'math': 1, 'attention': 2}
                 
                 if responses.exists():
                     last_response = responses.first()
@@ -170,7 +171,7 @@ class GetNextQuestionView(APIView):
                     
                     # 6. Session Accuracy (computed above)
                     
-                    # 7. Current Domain (integer)
+                    # 7. Current Domain (integer) - map to 0, 1, or 2
                     cur_domain = domain_map.get(last_response.domain, 0)
                     
                 else:
@@ -207,12 +208,37 @@ class GetNextQuestionView(APIView):
                     next_domain_idx = 0
                     next_diff_idx = 1
                 
-                # Map indices to names
+                # Map indices to names (only 3 domains)
                 domain_names = {0: 'reading', 1: 'math', 2: 'attention'}
                 diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
                 
-                next_domain = domain_names.get(next_domain_idx, 'reading')
+                # Apply domain rotation to ensure variety
+                # Count how many times each domain has appeared
+                domain_counts = {
+                    'reading': responses.filter(domain='reading').count(),
+                    'math': responses.filter(domain='math').count(),
+                    'attention': responses.filter(domain='attention').count()
+                }
+                
+                # Get predicted domain
+                predicted_domain = domain_names.get(next_domain_idx, 'reading')
+                
+                # If predicted domain has appeared 3+ times more than another domain, rotate
+                min_count = min(domain_counts.values()) if domain_counts else 0
+                max_count = max(domain_counts.values()) if domain_counts else 0
+                
+                if domain_counts.get(predicted_domain, 0) >= min_count + 3:
+                    # Force rotation to least-used domain
+                    next_domain = min(domain_counts, key=domain_counts.get)
+                    print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
+                else:
+                    next_domain = predicted_domain
+                
                 next_difficulty = diff_names.get(next_diff_idx, 'medium')
+                
+                # Debug logging
+                print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
+                print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
                 
                 # Check if session should end (15-20 questions)
                 response_count = UserResponse.objects.filter(session=session).count()
