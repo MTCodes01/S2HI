@@ -100,9 +100,20 @@ backend/
 - **FinalPrediction** - ML results
 
 ## ML Model Integration
-The backend uses `ld_model.pkl` for predictions. Replace with your trained model that accepts features:
-- accuracy, avg_response_time, error_rate, consistency
-- reading_accuracy, math_accuracy
-- letter_reversal_count, confidence_mismatch
+The backend supports **two independent ML models**:
 
-Returns: `[dyslexia_risk, dyscalculia_risk, attention_risk]`
+### 1. Question Generation Model (`question_model.pkl`)
+- **Purpose**: Adaptive question selection
+- **Input**: Last answer performance + session stats (10 features)
+- **Output**: Next domain + difficulty
+- **Fallback**: Rule-based adaptive logic
+
+### 2. Final Prediction Model (`prediction_model.pkl`)
+- **Purpose**: LD risk assessment
+- **Input**: Session summary (8 features)
+- **Output**: Risk scores (dyslexia, dyscalculia, attention)
+- **Fallback**: Formula-based risk calculation
+
+Both models are **optional**. Place them in the `backend/` folder to enable ML-based features.
+
+See [MODEL_DOCUMENTATION.md](MODEL_DOCUMENTATION.md) for complete specifications.

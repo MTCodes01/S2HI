@@ -63,6 +63,7 @@ def get_adaptive_question(
 ) -> Question:
     """
     Get the next adaptive question based on user performance.
+    Tries ML model first, falls back to rule-based logic.
     
     Args:
         session_id: Current session ID
@@ -78,23 +79,36 @@ def get_adaptive_question(
         session_id=session_id
     ).values_list('question_id', flat=True)
     
-    # Determine difficulty for next question
-    if last_question_id and correct is not None and response_time_ms is not None:
-        try:
-            last_question = Question.objects.get(question_id=last_question_id)
-            next_difficulty = get_next_difficulty(
-                last_question.difficulty,
-                correct,
-                response_time_ms
-            )
-        except Question.DoesNotExist:
-            next_difficulty = 'medium'
-    else:
-        # First question - start with easy
-        next_difficulty = 'easy'
-    
-    # Get next domain
-    next_domain = get_next_domain(session_id, None)
+    # Try ML model first
+    try:
+        from .ml_utils import get_next_question_ml
+        next_domain, next_difficulty = get_next_question_ml(
+            session_id,
+            last_question_id,
+            correct,
+            response_time_ms
+        )
+    except Exception as e:
+        # Fallback to rule-based logic
+        print(f"⚠️  ML question generation failed, using rule-based: {e}")
+        
+        # Determine difficulty for next question
+        if last_question_id and correct is not None and response_time_ms is not None:
+            try:
+                last_question = Question.objects.get(question_id=last_question_id)
+                next_difficulty = get_next_difficulty(
+                    last_question.difficulty,
+                    correct,
+                    response_time_ms
+                )
+            except Question.DoesNotExist:
+                next_difficulty = 'medium'
+        else:
+            # First question - start with easy
+            next_difficulty = 'easy'
+        
+        # Get next domain
+        next_domain = get_next_domain(session_id, None)
     
     # Try to find a question matching criteria
     question = Question.objects.filter(
