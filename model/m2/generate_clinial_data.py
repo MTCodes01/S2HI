@@ -1,90 +1,73 @@
 import pandas as pd
-import numpy as np
 import random
 import os
 
-# --- CONFIGURATION ---
-SAMPLES_PER_CLASS = 2000 # Total 8000 samples
+SAMPLES_PER_CLASS = 3000 
 
 def generate_clinical_dataset():
     data = []
+    print("🏥 Generating SHARP clinical profiles...")
     
-    # -----------------------------------------
-    # CLASS 0: LOW RISK (Healthy Performance)
-    # -----------------------------------------
-    print("generating Low Risk profiles...")
+    # 1. LOW RISK (Healthy) -> High Acc, Normal Speed, Zero Mistakes
     for _ in range(SAMPLES_PER_CLASS):
         row = {
-            "reading_acc": random.uniform(0.8, 1.0),   # High Accuracy
-            "math_acc": random.uniform(0.8, 1.0),
-            "focus_acc": random.uniform(0.8, 1.0),
-            "avg_time_ms": random.uniform(2000, 5000), # Normal Speed
-            "rev_rate": random.uniform(0.0, 0.1),      # Low Reversals
-            "pv_rate": random.uniform(0.0, 0.1),       # Low Place Value Errors
-            "impulse_rate": random.uniform(0.0, 0.1),  # Low Impulsivity
+            "reading_acc": random.uniform(0.90, 1.0), # Very High
+            "math_acc":    random.uniform(0.90, 1.0),
+            "focus_acc":   random.uniform(0.90, 1.0),
+            "avg_time_ms": random.uniform(3000, 6000), 
+            "rev_rate":    0.0,  # FORCE ZERO
+            "pv_rate":     0.0,  # FORCE ZERO
+            "impulse_rate":0.0,  # FORCE ZERO
             "label": "Low Risk"
         }
         data.append(row)
 
-    # -----------------------------------------
-    # CLASS 1: DYSLEXIA RISK (Reading Struggle)
-    # -----------------------------------------
-    print("generating Dyslexia Risk profiles...")
+    # 2. DYSLEXIA (Reading Only) -> Low Read Acc + HIGH Reversals
     for _ in range(SAMPLES_PER_CLASS):
         row = {
-            "reading_acc": random.uniform(0.2, 0.6),   # Low Reading Acc
-            "math_acc": random.uniform(0.7, 1.0),      # Math often normal
-            "focus_acc": random.uniform(0.6, 1.0),
-            "avg_time_ms": random.uniform(4000, 9000), # Slow reading
-            "rev_rate": random.uniform(0.4, 0.9),      # HIGH Reversal Rate (The Key Signal)
-            "pv_rate": random.uniform(0.0, 0.2),
-            "impulse_rate": random.uniform(0.0, 0.2),
+            "reading_acc": random.uniform(0.30, 0.60), # Distinctly Low
+            "math_acc":    random.uniform(0.80, 1.0),  # High
+            "focus_acc":   random.uniform(0.80, 1.0),
+            "avg_time_ms": random.uniform(6000, 12000),# Slow
+            "rev_rate":    random.uniform(0.40, 0.90), # VERY HIGH
+            "pv_rate":     random.uniform(0.0, 0.05),
+            "impulse_rate":random.uniform(0.0, 0.10),
             "label": "Dyslexia Risk"
         }
         data.append(row)
 
-    # -----------------------------------------
-    # CLASS 2: DYSCALCULIA RISK (Math Struggle)
-    # -----------------------------------------
-    print("generating Dyscalculia Risk profiles...")
+    # 3. DYSCALCULIA (Math Only) -> Low Math Acc + HIGH Place Value
     for _ in range(SAMPLES_PER_CLASS):
         row = {
-            "reading_acc": random.uniform(0.7, 1.0),   # Reading often normal
-            "math_acc": random.uniform(0.2, 0.55),     # Low Math Acc
-            "focus_acc": random.uniform(0.6, 1.0),
-            "avg_time_ms": random.uniform(4000, 10000),# Slow math
-            "rev_rate": random.uniform(0.0, 0.2),
-            "pv_rate": random.uniform(0.4, 0.9),       # HIGH Place Value Errors (The Key Signal)
-            "impulse_rate": random.uniform(0.0, 0.2),
+            "reading_acc": random.uniform(0.80, 1.0),
+            "math_acc":    random.uniform(0.30, 0.55), # Distinctly Low
+            "focus_acc":   random.uniform(0.80, 1.0),
+            "avg_time_ms": random.uniform(6000, 15000),# Slow
+            "rev_rate":    random.uniform(0.0, 0.05),
+            "pv_rate":     random.uniform(0.50, 0.95), # VERY HIGH
+            "impulse_rate":random.uniform(0.0, 0.10),
             "label": "Dyscalculia Risk"
         }
         data.append(row)
 
-    # -----------------------------------------
-    # CLASS 3: ATTENTION RISK (ADHD Traits)
-    # -----------------------------------------
-    print("generating Attention Risk profiles...")
+    # 4. ATTENTION (Focus Only) -> Low Focus + Fast Speed + HIGH Impulse
     for _ in range(SAMPLES_PER_CLASS):
         row = {
-            "reading_acc": random.uniform(0.5, 0.8),   # Inconsistent
-            "math_acc": random.uniform(0.5, 0.8),      # Inconsistent
-            "focus_acc": random.uniform(0.3, 0.6),     # Low Focus Acc
-            "avg_time_ms": random.uniform(500, 1500),  # VERY FAST (Impulsive)
-            "rev_rate": random.uniform(0.1, 0.3),
-            "pv_rate": random.uniform(0.1, 0.3),
-            "impulse_rate": random.uniform(0.5, 0.95), # HIGH Impulsivity (The Key Signal)
+            "reading_acc": random.uniform(0.60, 0.90), # Okayish
+            "math_acc":    random.uniform(0.60, 0.90), # Okayish
+            "focus_acc":   random.uniform(0.20, 0.50), # LOW
+            "avg_time_ms": random.uniform(500, 1500),  # SUPER FAST
+            "rev_rate":    random.uniform(0.0, 0.15),
+            "pv_rate":     random.uniform(0.0, 0.15),
+            "impulse_rate":random.uniform(0.60, 1.0),  # VERY HIGH
             "label": "Attention Risk"
         }
         data.append(row)
 
-    # Convert to DataFrame and Shuffle
-    df = pd.DataFrame(data)
-    df = df.sample(frac=1).reset_index(drop=True) # Shuffle
-
-    # Save
-    csv_path = "clinical_data.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"✅ Generated {len(df)} clinical profiles. Saved to {os.getcwd()}/{csv_path}")
+    # Shuffle & Save
+    df = pd.DataFrame(data).sample(frac=1).reset_index(drop=True)
+    df.to_csv("clinical_data.csv", index=False)
+    print("✅ Generated non-overlapping data.")
 
 if __name__ == "__main__":
     generate_clinical_dataset()
