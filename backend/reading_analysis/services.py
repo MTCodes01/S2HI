@@ -118,9 +118,9 @@ Analyze the audio for:
                     "not in an ACTIVE state" in error_str):
                     if attempt < max_retries - 1:
                         # Aggressive progressive wait for WebM: 5s, 8s, 12s, 18s, 25s
-                        wait_time = 5 + (attempt * 3) + (attempt * attempt)
-                        print(f"⏳ Attempt {attempt + 1} failed, file still processing. Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
+                        # wait_time = 5 + (attempt * 3) + (attempt * attempt)
+                        # print(f"⏳ Attempt {attempt + 1} failed, file still processing. Retrying in {wait_time}s...")
+                        time.sleep(1)
                         continue
                 # Re-raise if it's not a processing error or we're out of retries
                 raise
