@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "react-router-dom";
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import type { AssessmentResult, DashboardDataResponse } from "../types/types";
 import { getDashboardData, getUserHistory } from "../services/api";
 import ImprovementGraph from "../components/ImprovementGraph";
+import ReportTemplate from "../components/ReportTemplate";
 import "../styles/dashboard.css";
 
 interface LocationState {
@@ -15,6 +18,8 @@ interface LocationState {
 const Dashboard: React.FC = () => {
     const location = useLocation();
     const state = location.state as LocationState | null;
+    const reportRef = useRef<HTMLDivElement>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     const [dashboardData, setDashboardData] = useState<DashboardDataResponse | null>(null);
     const [historyData, setHistoryData] = useState<any[]>([]); // Use appropriate type
@@ -49,8 +54,6 @@ const Dashboard: React.FC = () => {
 
         fetchDashboardData();
     }, [hasSessionInfo, state?.userId, state?.sessionId]);
-
-    // ... (generateDashboardData function remains same) ...
 
     const generateDashboardData = () => {
         if (dashboardData) {
@@ -123,6 +126,77 @@ const Dashboard: React.FC = () => {
     const hasResults = dashboardData !== null;
     const studentData = generateDashboardData();
 
+    const handleExportPDF = async () => {
+        if (!reportRef.current) return;
+
+        setIsExporting(true);
+        try {
+            // Wait a moment for chart animations to complete in the hidden view
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Smart Pagination Logic
+            const container = reportRef.current;
+            const children = Array.from(container.querySelectorAll('.nobreak')) as HTMLElement[];
+            const A4_HEIGHT_PX = 1122; // Approx A4 height in px at standard screen DPI for A4 css size
+
+            // Clear previous margins
+            children.forEach(el => el.style.marginTop = '0px');
+
+            // Force reflow and calculate
+            for (const el of children) {
+                const rect = el.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                const top = rect.top - containerRect.top;
+                const bottom = top + rect.height;
+
+                const pageNumberStart = Math.floor(top / A4_HEIGHT_PX);
+                const pageNumberEnd = Math.floor(bottom / A4_HEIGHT_PX);
+
+                if (pageNumberStart !== pageNumberEnd) {
+                    const nextPageTop = (pageNumberStart + 1) * A4_HEIGHT_PX;
+                    const pushAmount = nextPageTop - top;
+                    el.style.marginTop = `${pushAmount + 20}px`;
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2, // Higher resolution
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210; // A4 width in mm
+            const pageHeight = 297; // A4 height in mm
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            pdf.save(`Assessment_Report_${studentData.studentId}.pdf`);
+        } catch (err) {
+            console.error("PDF Export failed:", err);
+            alert("Failed to export PDF. Please try again.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // ... (helper functions remain same) ...
     const getDomainIcon = (domain: string) => {
         switch (domain) {
@@ -186,6 +260,14 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="dashboard-container">
+            {/* Hidden Report Template */}
+            <ReportTemplate
+                ref={reportRef}
+                studentData={studentData}
+                historyData={historyData}
+                period="Current"
+            />
+
             {/* Ambient Background Elements */}
             <div className="ambient-orb orb-1"></div>
             <div className="ambient-orb orb-2"></div>
@@ -199,8 +281,13 @@ const Dashboard: React.FC = () => {
                     </p>
                 </div>
                 <div className="header-actions">
-                    <button className="btn btn-secondary">
-                        <span>📥</span> Export Report
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleExportPDF}
+                        disabled={isExporting}
+                    >
+                        <span>{isExporting ? '⏳' : '📥'}</span>
+                        {isExporting ? 'Generating...' : 'Export Report'}
                     </button>
                     <Link to="/" className="btn btn-primary">
                         <span>🔄</span> New Assessment
