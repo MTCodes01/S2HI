@@ -37,8 +37,8 @@ export default function WordChainBuilder({ targetWord, scrambledLetters, onAnswe
         setAvailableLetters(newAvailable);
         setMoves(prev => prev + 1);
 
-        // Auto-check if word is complete
-        if (newAvailable.length === 0) {
+        // Auto-check if word is complete based on target length
+        if (newChain.length === targetWord.length) {
             checkResult(newChain.join(''));
         }
     };

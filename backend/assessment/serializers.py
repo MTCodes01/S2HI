@@ -56,6 +56,7 @@ class EndSessionRequestSerializer(serializers.Serializer):
     """Request serializer for ending a session."""
     user_id = serializers.IntegerField()
     session_id = serializers.CharField()
+    confidence_level = serializers.CharField(required=False, allow_null=True)
 
 
 class EndSessionResponseSerializer(serializers.Serializer):

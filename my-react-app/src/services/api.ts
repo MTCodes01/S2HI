@@ -1,18 +1,18 @@
 // API Service for LD Screening Backend
-import type { 
-  SessionResponse, 
-  Question, 
-  AnswerSubmission, 
-  AnswerResponse, 
+import type {
+  SessionResponse,
+  Question,
+  AnswerSubmission,
+  AnswerResponse,
   AssessmentResult,
-  DashboardDataResponse 
+  DashboardDataResponse
 } from '../types/types';
 
 const API_BASE_URL = 'http://localhost:8000';
 
 // Helper function for API requests
 async function apiRequest<T>(
-  endpoint: string, 
+  endpoint: string,
   data: Record<string, unknown>
 ): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -20,12 +20,12 @@ async function apiRequest<T>(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Network error' }));
     throw new Error(error.error || `HTTP ${response.status}`);
   }
-  
+
   return response.json();
 }
 
@@ -56,13 +56,13 @@ export async function getNextQuestion(
     user_id: userId,
     session_id: sessionId
   };
-  
+
   if (lastQuestion) {
     body.last_question_id = lastQuestion.id;
     body.correct = lastQuestion.correct;
     body.response_time_ms = lastQuestion.responseTime;
   }
-  
+
   return apiRequest<Question>('/get-next-question/', body);
 }
 
@@ -90,11 +90,13 @@ export async function submitAnswer(
  */
 export async function endSession(
   userId: number,
-  sessionId: string
+  sessionId: string,
+  confidence?: string
 ): Promise<AssessmentResult> {
   return apiRequest<AssessmentResult>('/end-session/', {
     user_id: userId,
-    session_id: sessionId
+    session_id: sessionId,
+    confidence_level: confidence
   });
 }
 

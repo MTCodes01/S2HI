@@ -431,6 +431,7 @@ class EndSessionView(APIView):
         data = serializer.validated_data
         user_id = data['user_id']
         session_id = data['session_id']
+        user_confidence = data.get('confidence_level')
         
         # Validate user and session
         try:
@@ -488,7 +489,7 @@ class EndSessionView(APIView):
                 attention_risk_score=prediction_result['scores']['attention'],
                 final_label=prediction_result['risk'],
                 key_insights=prediction_result['key_insights'],
-                confidence_level=prediction_result['confidence_level']
+                confidence_level=user_confidence if user_confidence else prediction_result['confidence_level']
             )
         
         # Return response to frontend
