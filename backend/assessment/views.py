@@ -243,7 +243,7 @@ class GetNextQuestionView(APIView):
                 # Check if session should end (15-20 questions)
                 response_count = UserResponse.objects.filter(session=session).count()
                 
-                if response_count >= 15:
+                if response_count >= 5:
                     # End session automatically
                     return Response(
                         {
