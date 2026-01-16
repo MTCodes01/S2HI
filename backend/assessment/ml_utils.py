@@ -483,11 +483,11 @@ def get_prediction(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
         else:
             key_insights.append("Some areas may benefit from additional assessment")
     
-    # Create risk scores (approximate from the prediction)
+    # Create risk scores (dynamic calculation based on performance)
     scores = {
-        'dyslexia': 0.7 if 'dyslexia' in final_label.lower() else 0.2,
-        'dyscalculia': 0.7 if 'dyscalculia' in final_label.lower() else 0.2,
-        'attention': 0.7 if 'attention' in final_label.lower() else 0.2
+        'dyslexia': round(min(1.0, max(0.1, 1.0 - reading_acc + (rev_rate * 0.5))), 2),
+        'dyscalculia': round(min(1.0, max(0.1, 1.0 - math_acc + (pv_rate * 0.5))), 2),
+        'attention': round(min(1.0, max(0.1, 1.0 - focus_acc + (impulse_rate * 0.5))), 2)
     }
     
     return {
