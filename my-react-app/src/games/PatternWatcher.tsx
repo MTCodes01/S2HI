@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import "../styles/PatternWatcher.css";
 
 type PatternResult = {
@@ -8,96 +8,169 @@ type PatternResult = {
 };
 
 type Props = {
-    expectedPattern: string[];
-    currentItem: string;
-    isBreak: boolean;
+    expectedPattern?: string[]; // Kept for interface compatibility
+    currentItem?: string;       // Kept for interface compatibility
+    isBreak?: boolean;          // Kept for compatibility
     onAnswer: (result: PatternResult) => void;
+    ageGroup?: string;
 };
 
+
+
 export default function PatternWatcher({
-    expectedPattern,
-    currentItem,
-    isBreak,
     onAnswer,
-    ageGroup = "9-11" // Default prop
-}: Props & { ageGroup?: string }) {
-    const startTime = useRef<number>(Date.now());
-    const [responded, setResponded] = useState(false);
+    ageGroup = "9-11"
+}: Props) {
+    const [currentShape, setCurrentShape] = useState<string>("●");
+    const [isGameActive, setIsGameActive] = useState(false);
+    const [message, setMessage] = useState("Watch the pattern...");
 
-    // Track previous item for visual comparison
-    const prevItemRef = useRef<string | null>(null);
-    useEffect(() => {
-        return () => { prevItemRef.current = currentItem; };
-    }, [currentItem]);
+    // Game state
+    const sequenceRef = useRef<string[]>([]);
+    const currentIndexRef = useRef(0);
+    const breakIndexRef = useRef(0);
+    const timeoutRef = useRef<number | null>(null);
+    const startTimeRef = useRef<number>(0);
+    const hasRespondedRef = useRef(false);
 
-    useEffect(() => {
-        startTime.current = Date.now();
-        setResponded(false);
-    }, [currentItem]);
+    // Setup difficulty variables based on age
+    const speed = ageGroup === '6-8' ? 2000 : (ageGroup === '12-14' ? 1000 : 1500);
 
-    // Adjust timeout based on age
-    const getTimeoutDuration = () => {
-        if (ageGroup === '6-8') return 5000; // Slower for younger
-        if (ageGroup === '12-14') return 2000; // Faster for older
-        return 3000; // Default
-    };
+    // Generate a sequence
+    const startPatternGame = useCallback(() => {
+        // Define simple patterns
+        const patterns = [
+            ["●", "■", "●", "■", "●"], // ABAB...
+            ["▲", "▲", "▼", "▼", "▲"], // AABB...
+            ["★", "☆", "★", "☆", "★"]
+        ];
 
-    const handleClick = () => {
-        if (responded) return;
-        setResponded(true);
+        const basePattern = patterns[Math.floor(Math.random() * patterns.length)];
 
-        const responseTime = Date.now() - startTime.current;
+        // Determine where the break happens (between index 2 and 4 typically)
+        const breakIdx = Math.floor(Math.random() * 2) + 2; // Index 2 or 3
 
-        onAnswer({
-            correct: isBreak,
-            responseTime,
-            mistakeType: isBreak ? undefined : "false_alarm"
-        });
-    };
+        const sequence = [...basePattern];
+        // Insert break
+        sequence[breakIdx] = sequence[breakIdx] === "●" ? "■" : "●"; // Simplify break item for now
 
-    // Missed break detection
-    useEffect(() => {
-        if (isBreak) {
-            const timeout = setTimeout(() => {
-                if (!responded) {
-                    onAnswer({
-                        correct: false,
-                        responseTime: getTimeoutDuration(),
-                        mistakeType: "missed_pattern_break"
-                    });
-                }
-            }, getTimeoutDuration());
+        // Actually, let's just make a cleaner break logic
+        // If pattern is ABAB (0,1,0,1), at index 2 (0) we want a break.
+        // It's easier to just generate a flat stream.
 
-            return () => clearTimeout(timeout);
+        const stream = [];
+        const symbolA = ["●", "▲", "★"][Math.floor(Math.random() * 3)];
+        const symbolB = ["■", "▼", "☆"][Math.floor(Math.random() * 3)];
+
+        // Create standard ABAB pattern
+        for (let i = 0; i < 6; i++) {
+            stream.push(i % 2 === 0 ? symbolA : symbolB);
         }
-    }, [isBreak, responded, onAnswer, ageGroup]);
+
+        // Insert Break
+        const breakPos = 3 + Math.floor(Math.random() * 2); // 3 or 4
+        stream[breakPos] = stream[breakPos - 1]; // Repetition break (A,B,A,A...)
+
+        sequenceRef.current = stream;
+        breakIndexRef.current = breakPos;
+        currentIndexRef.current = 0;
+        hasRespondedRef.current = false;
+
+        setIsGameActive(true);
+        nextStep();
+    }, []);
+
+    const finishGame = (correct: boolean, avgTime: number, mistake?: string) => {
+        setIsGameActive(false);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+        setMessage(correct ? "Excellent Job!" : "Not quite...");
+
+        // Delay before submitting to let user see result
+        setTimeout(() => {
+            onAnswer({
+                correct,
+                responseTime: avgTime,
+                mistakeType: mistake
+            });
+        }, 1000);
+    };
+
+    const nextStep = () => {
+        if (currentIndexRef.current >= sequenceRef.current.length) {
+            // End of sequence without user noticing break (if any) or just finished
+            // If we passed the break index without response, it's a miss
+            if (!hasRespondedRef.current && currentIndexRef.current > breakIndexRef.current) {
+                finishGame(false, 2000, "missed_pattern_break");
+            } else {
+                // Just finished standard sequence
+                finishGame(true, 1500);
+            }
+            return;
+        }
+
+        const item = sequenceRef.current[currentIndexRef.current];
+        setCurrentShape(item);
+
+        // Check if we just missed the break
+        if (!hasRespondedRef.current && currentIndexRef.current > breakIndexRef.current) {
+            finishGame(false, speed, "missed_pattern_break");
+            return;
+        }
+
+        startTimeRef.current = Date.now();
+        currentIndexRef.current += 1;
+
+        timeoutRef.current = window.setTimeout(nextStep, speed);
+    };
+
+    const handleReaction = () => {
+        if (!isGameActive || hasRespondedRef.current) return;
+
+        hasRespondedRef.current = true;
+        const responseTime = Date.now() - startTimeRef.current;
+
+        // Correct if we are AT the break index
+        // breakIndexRef is where the item CHANGED from expectation
+        // Current item displayed is at currentIndexRef - 1
+        const displayedIndex = currentIndexRef.current - 1;
+
+        if (displayedIndex === breakIndexRef.current) {
+            finishGame(true, responseTime);
+        } else {
+            finishGame(false, responseTime, "false_alarm");
+        }
+    };
+
+    useEffect(() => {
+        startPatternGame();
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, [startPatternGame]);
 
     return (
         <div className="pattern-watcher-container">
-            <h2 className="pattern-watcher-heading">Tap when the pattern changes!</h2>
+            <h2 className="pattern-watcher-heading">Spot the Odd One!</h2>
+            <p className="pattern-instruction">Tap the button when the pattern breaks!</p>
 
-            <div className="pattern-comparison">
-                {/* Visual Hint: Show previous item faintly */}
-                <div className="pattern-item previous">
-                    <span className="label">Previous</span>
-                    <div className="content">{prevItemRef.current || "?"}</div>
-                </div>
-
-                <div className="pattern-arrow">➡</div>
-
-                <div className={`pattern-item current ${isBreak ? "highlight-break" : ""}`}>
-                    <span className="label">Current</span>
-                    <div className="content">{currentItem}</div>
+            <div className="pattern-display-area">
+                <div className={`pattern-item current animate-pop`}>
+                    {currentShape}
                 </div>
             </div>
 
-            <button
-                onClick={handleClick}
-                className={`pattern-action-button ${responded ? 'clicked' : ''}`}
-                disabled={responded}
-            >
-                {responded ? (isBreak ? "Good Catch!" : "Oops!") : "Different!"}
-            </button>
+            <div className="pattern-controls">
+                <button
+                    onClick={handleReaction}
+                    className="pattern-action-button"
+                    disabled={!isGameActive}
+                >
+                    Different!
+                </button>
+            </div>
+
+            <div className="status-message">{!isGameActive && message}</div>
         </div>
     );
 }

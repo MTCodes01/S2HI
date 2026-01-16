@@ -146,10 +146,10 @@ class GetNextQuestionView(APIView):
             ]
             
             generator_path = None
-            for path in paths_to_check:
-                if os.path.exists(path):
-                    generator_path = path
-                    break
+            # for path in paths_to_check:
+            #     if os.path.exists(path):
+            #         generator_path = path
+            #         break
             
             if generator_path:
                 generator = joblib.load(generator_path)
@@ -794,6 +794,7 @@ class GetUserHistoryView(APIView):
         for pred in predictions:
             history_data.append({
                 'date': pred.predicted_at.strftime('%Y-%m-%d'),
+                'datetime': pred.predicted_at.isoformat(),
                 'dyslexia_score': pred.dyslexia_risk_score,
                 'dyscalculia_score': pred.dyscalculia_risk_score,
                 'attention_score': pred.attention_risk_score,
