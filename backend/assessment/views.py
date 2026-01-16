@@ -26,25 +26,25 @@ from .ml_utils import get_prediction
 class StartSessionView(APIView):
     """
     POST /start-session/
-    
+
     Create a new user and session.
-    
+
     Request:
         {"age_group": "9-11"}
-    
+
     Response:
         {"user_id": 101, "session_id": "S_101_01"}
     """
-    
+
     def post(self, request):
         serializer = StartSessionRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         age_group = serializer.validated_data['age_group']
         user_id = serializer.validated_data.get('user_id')
-        
+
         with transaction.atomic():
             # Create or get user
             if user_id:
@@ -58,31 +58,31 @@ class StartSessionView(APIView):
                     user = User.objects.create(age_group=age_group)
             else:
                 user = User.objects.create(age_group=age_group)
-            
+
             # Generate session ID
             session_count = Session.objects.filter(user=user).count()
             session_id = f"S_{user.user_id}_{session_count + 1:02d}"
-            
+
             # Create session
             session = Session.objects.create(
                 session_id=session_id,
                 user=user
             )
-        
+
         response_data = {
             'user_id': user.user_id,
             'session_id': session.session_id
         }
-        
+
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class GetNextQuestionView(APIView):
     """
     POST /get-next-question/
-    
+
     Get the next adaptive question based on user performance.
-    
+
     Request:
         {
             "user_id": 101,
@@ -91,7 +91,7 @@ class GetNextQuestionView(APIView):
             "correct": false,
             "response_time_ms": 980
         }
-    
+
     Response:
         {
             "question_id": "R_06",
@@ -101,19 +101,19 @@ class GetNextQuestionView(APIView):
             "options": ["b", "d", "p", "q"]
         }
     """
-    
+
     def post(self, request):
         serializer = GetNextQuestionRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         session_id = data['session_id']
         last_question_id = data.get('last_question_id')
         correct = data.get('correct')
         response_time_ms = data.get('response_time_ms')
-        
+
         # Validate session exists
         try:
             session = Session.objects.get(session_id=session_id)
@@ -122,69 +122,80 @@ class GetNextQuestionView(APIView):
                 {'error': 'Session not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         # Get next adaptive question using ML model
         try:
             import joblib
             import os
             import numpy as np
             from django.conf import settings
-            
+
             import sys
-            
+
             # Ensure the current directory is in sys.path so the unpickler can find 'question_generator_model'
             current_dir = os.path.dirname(os.path.abspath(__file__))
             if current_dir not in sys.path:
                 sys.path.append(current_dir)
 
-            # Load question generator model (trained by team)
+            # Load or create question generator model
             # Check multiple locations and names
             paths_to_check = [
                 os.path.join(current_dir, 'question_model.pkl'),       # Trained script output
                 os.path.join(settings.BASE_DIR, 'question_generator.pkl'), # Old location
                 os.path.join(settings.BASE_DIR, 'question_model.pkl')
             ]
-            
+
+            generator = None
             generator_path = None
-            # for path in paths_to_check:
-            #     if os.path.exists(path):
-            #         generator_path = path
-            #         break
-            
-            if generator_path:
-                generator = joblib.load(generator_path)
-                
+            for path in paths_to_check:
+                if os.path.exists(path):
+                    try:
+                        generator = joblib.load(path)
+                        generator_path = path
+                        print(f"✅ Loaded generator from {path}")
+                        break
+                    except Exception as e:
+                        print(f"⚠️  Failed to load generator from {path}: {e}")
+
+            # If no pickled generator found, create a new one
+            if not generator:
+                from .question_generator_model import QuestionGeneratorModel
+                generator = QuestionGeneratorModel()
+                print("✅ Created new QuestionGeneratorModel instance")
+
+            if generator:
                 # Get previous responses to determine current state
                 responses = UserResponse.objects.filter(session=session).order_by('-answered_at')
-                
+
                 # Calculate session accuracy
                 total_responses = responses.count()
                 correct_count = responses.filter(correct=True).count()
                 session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
-                
-                # Only 3 domains for assessment: reading, math, attention
-                domain_map = {'reading': 0, 'math': 1, 'attention': 2}
-                
+
+                # Support all 5 domains for assessment: reading, math, attention, writing, logic
+                domain_map = {'reading': 0, 'math': 1, 'attention': 2, 'writing': 3, 'logic': 4}
+                domain_names = {0: 'reading', 1: 'math', 2: 'attention', 3: 'writing', 4: 'logic'}
+
                 if responses.exists():
                     last_response = responses.first()
-                    
+
                     # 1. Last Correct
                     is_correct = 1 if correct else 0
-                    
+
                     # 2. Last Response Time
                     time_ms = response_time_ms if response_time_ms is not None else 2000
-                    
+
                     # 3-5. Difficulty One-Hot
                     last_diff = last_response.difficulty
                     d_easy = 1 if last_diff == 'easy' else 0
                     d_medium = 1 if last_diff == 'medium' else 0
                     d_hard = 1 if last_diff == 'hard' else 0
-                    
+
                     # 6. Session Accuracy (computed above)
-                    
+
                     # 7. Current Domain (integer) - map to 0, 1, or 2
                     cur_domain = domain_map.get(last_response.domain, 0)
-                    
+
                 else:
                     # First question defaults
                     is_correct = 1
@@ -194,22 +205,22 @@ class GetNextQuestionView(APIView):
                     d_hard = 0
                     session_accuracy = 1.0
                     cur_domain = 0
-                
-                # Prepare features for model: 
+
+                # Prepare features for model:
                 # [last_correct, last_response_time, diff_easy, diff_medium, diff_hard, session_accuracy, current_domain]
                 features = np.array([[
-                    is_correct, 
-                    time_ms, 
-                    d_easy, 
-                    d_medium, 
-                    d_hard, 
-                    session_accuracy, 
+                    is_correct,
+                    time_ms,
+                    d_easy,
+                    d_medium,
+                    d_hard,
+                    session_accuracy,
                     cur_domain
                 ]])
-                
+
                 # Predict next domain and difficulty
                 prediction = generator.predict(features)
-                
+
                 # Parse prediction (returns [[domain, difficulty]])
                 if len(prediction.shape) == 2 and prediction.shape[1] == 2:
                     next_domain_idx = int(prediction[0][0])
@@ -218,42 +229,43 @@ class GetNextQuestionView(APIView):
                     # Fallback
                     next_domain_idx = 0
                     next_diff_idx = 1
-                
-                # Map indices to names (only 3 domains)
-                domain_names = {0: 'reading', 1: 'math', 2: 'attention'}
+
+                # Use domain_names that was already defined above
                 diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
-                
+
                 # Apply domain rotation to ensure variety
                 # Count how many times each domain has appeared
                 domain_counts = {
                     'reading': responses.filter(domain='reading').count(),
                     'math': responses.filter(domain='math').count(),
-                    'attention': responses.filter(domain='attention').count()
+                    'attention': responses.filter(domain='attention').count(),
+                    'writing': responses.filter(domain='writing').count(),
+                    'logic': responses.filter(domain='logic').count()
                 }
-                
+
                 # Get predicted domain
                 predicted_domain = domain_names.get(next_domain_idx, 'reading')
-                
+
                 # If predicted domain has appeared 3+ times more than another domain, rotate
                 min_count = min(domain_counts.values()) if domain_counts else 0
                 max_count = max(domain_counts.values()) if domain_counts else 0
-                
+
                 if domain_counts.get(predicted_domain, 0) >= min_count + 3:
                     # Force rotation to least-used domain
                     next_domain = min(domain_counts, key=domain_counts.get)
                     print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
                 else:
                     next_domain = predicted_domain
-                
+
                 next_difficulty = diff_names.get(next_diff_idx, 'medium')
-                
+
                 # Debug logging
                 print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
                 print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
-                
+
                 # Check if session should end (15-20 questions)
                 response_count = UserResponse.objects.filter(session=session).count()
-                
+
                 if response_count >= 30:
                     # End session automatically
                     return Response(
@@ -264,13 +276,13 @@ class GetNextQuestionView(APIView):
                         },
                         status=status.HTTP_200_OK
                     )
-                
+
                 # 🎯 GENERATE QUESTION DYNAMICALLY using the model
                 question_data = generator.generate_question(next_domain, next_difficulty)
-                
+
                 # Create a unique question ID
                 question_id = f"Q_{session_id}_{response_count + 1}"
-                
+
                 response_data = {
                     'question_id': question_id,
                     'domain': question_data['domain'],
@@ -279,34 +291,9 @@ class GetNextQuestionView(APIView):
                     'options': question_data['options'],
                     'correct_option': question_data['correct_option']  # Include for answer validation
                 }
-                
+
                 return Response(response_data, status=status.HTTP_200_OK)
-                
-            else:
-                # Fallback to database if generator not found
-                question = get_adaptive_question(
-                    session_id=session_id,
-                    last_question_id=last_question_id,
-                    correct=correct,
-                    response_time_ms=response_time_ms
-                )
-                
-                if not question:
-                    return Response(
-                        {'message': 'No more questions available', 'end_session': True},
-                        status=status.HTTP_200_OK
-                    )
-                
-                response_data = {
-                    'question_id': question.question_id,
-                    'domain': question.domain,
-                    'difficulty': question.difficulty,
-                    'question_text': question.question_text,
-                    'options': question.options
-                }
-                
-                return Response(response_data, status=status.HTTP_200_OK)
-                
+
         except Exception as e:
             import traceback
             return Response(
@@ -318,9 +305,9 @@ class GetNextQuestionView(APIView):
 class SubmitAnswerView(APIView):
     """
     POST /submit-answer/
-    
+
     Store user response and mistake pattern.
-    
+
     Request:
         {
             "user_id": 101,
@@ -333,19 +320,19 @@ class SubmitAnswerView(APIView):
             "confidence": "low",
             "mistake_type": "letter_reversal"
         }
-    
+
     Response:
         {"status": "success", "response_id": 1}
     """
-    
+
     def post(self, request):
         serializer = SubmitAnswerRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
-        
+
         # Validate user, session, and question exist
         try:
             user = User.objects.get(user_id=data['user_id'])
@@ -354,7 +341,7 @@ class SubmitAnswerView(APIView):
                 {'error': 'User not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             session = Session.objects.get(session_id=data['session_id'])
         except Session.DoesNotExist:
@@ -362,7 +349,7 @@ class SubmitAnswerView(APIView):
                 {'error': 'Session not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             question = Question.objects.get(question_id=data['question_id'])
         except Question.DoesNotExist:
@@ -375,7 +362,7 @@ class SubmitAnswerView(APIView):
                 options=['a', 'b', 'c', 'd'],
                 correct_option='a'
             )
-        
+
         with transaction.atomic():
             # Create user response
             user_response = UserResponse.objects.create(
@@ -388,7 +375,7 @@ class SubmitAnswerView(APIView):
                 response_time_ms=data['response_time_ms'],
                 confidence=data.get('confidence')
             )
-            
+
             # Create mistake pattern if provided and answer is incorrect
             mistake_type = data.get('mistake_type')
             if mistake_type and not data['correct']:
@@ -400,13 +387,13 @@ class SubmitAnswerView(APIView):
                     severity = 'medium'
                 else:
                     severity = 'low'
-                
+
                 MistakePattern.objects.create(
                     response=user_response,
                     mistake_type=mistake_type,
                     severity=severity
                 )
-        
+
         return Response(
             {'status': 'success', 'response_id': user_response.response_id},
             status=status.HTTP_201_CREATED
@@ -416,12 +403,12 @@ class SubmitAnswerView(APIView):
 class EndSessionView(APIView):
     """
     POST /end-session/
-    
+
     End session, compute features, and get ML prediction.
-    
+
     Request:
         {"user_id": 101, "session_id": "S_101_01"}
-    
+
     Response:
         {
             "risk": "dyslexia-risk",
@@ -432,18 +419,18 @@ class EndSessionView(APIView):
             ]
         }
     """
-    
+
     def post(self, request):
         serializer = EndSessionRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         user_id = data['user_id']
         session_id = data['session_id']
         user_confidence = data.get('confidence_level')
-        
+
         # Validate user and session
         try:
             user = User.objects.get(user_id=user_id)
@@ -452,7 +439,7 @@ class EndSessionView(APIView):
                 {'error': 'User not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             session = Session.objects.get(session_id=session_id)
         except Session.DoesNotExist:
@@ -460,19 +447,19 @@ class EndSessionView(APIView):
                 {'error': 'Session not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         # Fetch all responses for this session
         responses = UserResponse.objects.filter(
             session=session
         ).select_related('question')
-        
+
         # Convert to list of dictionaries for ML processing
         response_data = []
         for response in responses:
             # Get mistake types for this response
             mistakes = MistakePattern.objects.filter(response=response)
             mistake_type = mistakes.first().mistake_type if mistakes.exists() else None
-            
+
             response_data.append({
                 'question_id': response.question_id,
                 'domain': response.domain,
@@ -482,15 +469,15 @@ class EndSessionView(APIView):
                 'confidence': response.confidence,
                 'mistake_type': mistake_type
             })
-        
+
         # Get ML prediction
         prediction_result = get_prediction(response_data)
-        
+
         with transaction.atomic():
             # Mark session as completed
             session.completed = True
             session.save()
-            
+
             # Store prediction
             FinalPrediction.objects.create(
                 session=session,
@@ -502,7 +489,7 @@ class EndSessionView(APIView):
                 key_insights=prediction_result['key_insights'],
                 confidence_level=user_confidence if user_confidence else prediction_result['confidence_level']
             )
-        
+
         # Return response to frontend
         return Response({
             'risk': prediction_result['risk'],
@@ -514,12 +501,12 @@ class EndSessionView(APIView):
 class GetDashboardDataView(APIView):
     """
     POST /get-dashboard-data/
-    
+
     Get comprehensive dashboard data for a completed session.
-    
+
     Request:
         {"user_id": 101, "session_id": "S_101_01"}
-    
+
     Response:
         {
             "student_id": "STU-101",
@@ -542,17 +529,17 @@ class GetDashboardDataView(APIView):
             }
         }
     """
-    
+
     def post(self, request):
         serializer = GetDashboardDataRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         user_id = data['user_id']
         session_id = data['session_id']
-        
+
         # Validate user and session
         try:
             user = User.objects.get(user_id=user_id)
@@ -561,7 +548,7 @@ class GetDashboardDataView(APIView):
                 {'error': 'User not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             session = Session.objects.get(session_id=session_id)
         except Session.DoesNotExist:
@@ -569,7 +556,7 @@ class GetDashboardDataView(APIView):
                 {'error': 'Session not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         # Get prediction if session is completed
         prediction = None
         if session.completed:
@@ -577,19 +564,19 @@ class GetDashboardDataView(APIView):
                 prediction = FinalPrediction.objects.get(session=session)
             except FinalPrediction.DoesNotExist:
                 pass
-        
+
         # Fetch all responses for this session
         responses = UserResponse.objects.filter(session=session).select_related('question')
-        
+
         if not responses.exists():
             return Response(
                 {'error': 'No responses found for this session'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         # Calculate domain-specific metrics
         domain_patterns = self._calculate_domain_patterns(responses)
-        
+
         # Map risk type to display name
         risk_labels = {
             'low-risk': 'Low Risk - No Significant Concerns',
@@ -597,14 +584,14 @@ class GetDashboardDataView(APIView):
             'dyscalculia-risk': 'Possible Dyscalculia-related Risk',
             'attention-risk': 'Possible Attention-related Risk'
         }
-        
+
         # Calculate risk percentage from confidence level
         risk_levels = {
             'low': 30,
             'moderate': 60,
             'high': 85
         }
-        
+
         # Prepare response data
         if prediction:
             final_risk = risk_labels.get(prediction.final_label, prediction.final_label)
@@ -616,11 +603,11 @@ class GetDashboardDataView(APIView):
             confidence = "N/A"
             risk_level = 0
             key_insights = []
-        
+
         # Format assessment date
         from datetime import datetime
         assessment_date = session.started_at.strftime('%B %d, %Y')
-        
+
         response_data = {
             'student_id': f'STU-{user.user_id}',
             'age_group': user.age_group,
@@ -632,13 +619,13 @@ class GetDashboardDataView(APIView):
             'key_insights': key_insights,
             'patterns': domain_patterns
         }
-        
+
         return Response(response_data, status=status.HTTP_200_OK)
-    
+
     def _calculate_domain_patterns(self, responses):
         """Calculate performance patterns for each domain."""
         from collections import defaultdict
-        
+
         # Group responses by domain
         domain_data = defaultdict(list)
         for response in responses:
@@ -648,15 +635,15 @@ class GetDashboardDataView(APIView):
                 domain = 'reading'  # Combine writing with reading
             elif domain == 'attention':
                 domain = 'focus'  # Map attention to focus
-            
+
             domain_data[domain].append(response)
-        
+
         patterns = {}
-        
+
         # Calculate metrics for each domain
         for domain in ['reading', 'math', 'focus']:
             domain_responses = domain_data.get(domain, [])
-            
+
             if not domain_responses:
                 # Default values if no data
                 patterns[domain] = {
@@ -666,14 +653,14 @@ class GetDashboardDataView(APIView):
                     'recommendation': 'Complete more questions in this domain for analysis.'
                 }
                 continue
-            
+
             # Calculate accuracy
             correct_count = sum(1 for r in domain_responses if r.correct)
             accuracy = (correct_count / len(domain_responses)) * 100 if domain_responses else 0
-            
+
             # Calculate average response time
             avg_time = sum(r.response_time_ms for r in domain_responses) / len(domain_responses)
-            
+
             # Find most common mistake
             mistakes = []
             for response in domain_responses:
@@ -681,28 +668,28 @@ class GetDashboardDataView(APIView):
                     mistake_patterns = MistakePattern.objects.filter(response=response)
                     for mistake in mistake_patterns:
                         mistakes.append(mistake.mistake_type)
-            
+
             common_mistake = self._get_common_mistake(mistakes, domain)
             recommendation = self._get_recommendation(domain, accuracy, avg_time, common_mistake)
-            
+
             patterns[domain] = {
                 'accuracy': round(accuracy, 1),
                 'avg_time': round(avg_time, 1),
                 'common_mistake': common_mistake,
                 'recommendation': recommendation
             }
-        
+
         return patterns
-    
+
     def _get_common_mistake(self, mistakes, domain):
         """Determine the most common mistake type."""
         if not mistakes:
             return "None"
-        
+
         from collections import Counter
         mistake_counts = Counter(mistakes)
         most_common = mistake_counts.most_common(1)[0][0]
-        
+
         # Map mistake types to readable names
         mistake_names = {
             'letter_reversal': 'Letter Reversal (b/d, p/q)',
@@ -713,12 +700,12 @@ class GetDashboardDataView(APIView):
             'omission': 'Omissions',
             'substitution': 'Substitutions'
         }
-        
+
         return mistake_names.get(most_common, most_common.replace('_', ' ').title())
-    
+
     def _get_recommendation(self, domain, accuracy, avg_time, common_mistake):
         """Generate personalized recommendation based on performance."""
-        
+
         if domain == 'reading':
             if accuracy < 60:
                 return "Use highlighted letters, phonics-based games, and short reading chunks. Consider multisensory learning approaches."
@@ -726,7 +713,7 @@ class GetDashboardDataView(APIView):
                 return "Continue with phonics practice. Gradually increase reading complexity with guided support."
             else:
                 return "Reading skills are developing well. Encourage independent reading with age-appropriate materials."
-        
+
         elif domain == 'math':
             if accuracy < 60:
                 return "Use visual aids, manipulatives, and step-by-step problem solving. Break down complex problems into smaller steps."
@@ -734,7 +721,7 @@ class GetDashboardDataView(APIView):
                 return "Practice with concrete examples and visual representations. Reinforce foundational concepts."
             else:
                 return "Math skills are age-appropriate. Introduce more challenging problems to maintain engagement."
-        
+
         elif domain == 'focus':
             if accuracy < 60 or avg_time < 800:
                 return "Short tasks with clear visual cues and structured breaks are helpful. Minimize distractions during work time."
@@ -742,19 +729,19 @@ class GetDashboardDataView(APIView):
                 return "Use timers and checklists to improve task completion. Provide positive reinforcement for sustained attention."
             else:
                 return "Attention span is within normal range. Continue with current strategies and gradually increase task duration."
-        
+
         return "Continue current learning approach and monitor progress."
 
 
 class GetUserHistoryView(APIView):
     """
     POST /get-user-history/
-    
+
     Get assessment history for a user to track improvement.
-    
+
     Request:
         {"user_id": 101}
-        
+
     Response:
         [
             {
@@ -767,16 +754,16 @@ class GetUserHistoryView(APIView):
             ...
         ]
     """
-    
+
     def post(self, request):
         from .serializers import GetUserHistoryRequestSerializer
         serializer = GetUserHistoryRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         user_id = serializer.validated_data['user_id']
-        
+
         try:
             user = User.objects.get(user_id=user_id)
         except User.DoesNotExist:
@@ -784,12 +771,12 @@ class GetUserHistoryView(APIView):
                 {'error': 'User not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-            
+
         # Get all completed sessions with predictions
         predictions = FinalPrediction.objects.filter(
             user=user
         ).select_related('session').order_by('predicted_at')
-        
+
         history_data = []
         for pred in predictions:
             history_data.append({
@@ -800,5 +787,5 @@ class GetUserHistoryView(APIView):
                 'attention_score': pred.attention_risk_score,
                 'risk_label': pred.final_label
             })
-            
+
         return Response(history_data, status=status.HTTP_200_OK)

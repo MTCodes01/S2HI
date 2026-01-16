@@ -38,6 +38,7 @@ class Question(models.Model):
         ('writing', 'Writing'),
         ('math', 'Math'),
         ('attention', 'Attention'),
+        ('logic', 'Logic'),
     ]
 
     DIFFICULTY_CHOICES = [
