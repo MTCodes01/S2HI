@@ -38,26 +38,39 @@ export default function FocusGuard({ stimulus, onAnswer }: Props) {
         });
     };
 
-    // Auto-timeout for "missed green"
+    // Auto-timeout logic
     useEffect(() => {
-        if (stimulus === "green") {
-            const timeout = setTimeout(() => {
-                if (!clicked) {
+        const timeoutDuration = 2000; // 2 seconds to decide
+
+        const timeout = setTimeout(() => {
+            if (!clicked) {
+                // If time runs out and they DIDN'T click:
+                if (stimulus === "red") {
+                    // Correct! They ignored the red.
+                    onAnswer({
+                        correct: true,
+                        responseTime: timeoutDuration,
+                        mistakeType: undefined
+                    });
+                } else {
+                    // Incorrect. They missed the green.
                     onAnswer({
                         correct: false,
-                        responseTime: 3000,
+                        responseTime: timeoutDuration,
                         mistakeType: "missed_target"
                     });
                 }
-            }, 3000);
+            }
+        }, timeoutDuration);
 
-            return () => clearTimeout(timeout);
-        }
+        return () => clearTimeout(timeout);
     }, [stimulus, clicked, onAnswer]);
 
     return (
         <div className="focus-guard-container">
-            <h2 className="focus-guard-heading">Tap GREEN. Ignore RED.</h2>
+            <h2 className="focus-guard-heading">
+                {stimulus === "green" ? "Tap GREEN!" : "Don't Tap!"}
+            </h2>
 
             <button
                 onClick={handleClick}

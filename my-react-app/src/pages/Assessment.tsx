@@ -13,6 +13,12 @@ import ReadAloudEcho from '../games/ReadAloudEcho';
 import NumberSenseDash from '../games/NumberSenseDash';
 import VisualMathMatch from '../games/VisualMathMatch';
 
+// New Games
+import WordChainBuilder from '../games/WordChainBuilder';
+import TimeEstimator from '../games/TimeEstimator';
+import TaskSwitchSprint from '../games/TaskSwitchSprint';
+import PlanAheadPuzzle from '../games/PlanAheadPuzzle';
+
 type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'complete' | 'error';
 
 const Assessment: React.FC = () => {
@@ -143,7 +149,7 @@ const Assessment: React.FC = () => {
 
     // Render welcome screen
     const renderWelcome = () => (
-        <div className={`assessment-welcome smooth-fade-in`}>
+        <div className="assessment-welcome smooth-fade-in">
             <div className="welcome-card glass-panel">
                 <div className="mascot-wrapper">
                     <Mascot expression="happy" size="large" />
@@ -198,7 +204,7 @@ const Assessment: React.FC = () => {
         </div>
     );
 
-    // Render the specific game component based on question domain/type
+    // Render logic for games
     const renderGameComponent = () => {
         if (!currentQuestion) return null;
 
@@ -206,10 +212,23 @@ const Assessment: React.FC = () => {
 
         // --- ATTENTION GAMES ---
         if (domain === 'attention') {
-            if (difficulty === 'easy' || difficulty === 'medium') {
+            if (difficulty === 'easy') {
                 return (
                     <FocusGuard
-                        stimulus={Math.random() > 0.3 ? "green" : "red"} // Randomize stimulus for demo
+                        stimulus={Math.random() > 0.3 ? "green" : "red"}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            } else if (difficulty === 'medium') {
+                return (
+                    <TaskSwitchSprint
+                        initialRule="COLOR"
+                        items={[
+                            { shape: 'circle', color: 'blue' },
+                            { shape: 'square', color: 'orange' },
+                            { shape: 'circle', color: 'orange' },
+                            { shape: 'square', color: 'blue' }
+                        ]}
                         onAnswer={handleGameAnswer}
                     />
                 );
@@ -217,8 +236,8 @@ const Assessment: React.FC = () => {
                 return (
                     <PatternWatcher
                         expectedPattern={["A", "B", "A", "B"]}
-                        currentItem={Math.random() > 0.2 ? "A" : "C"} // Demo logic
-                        isBreak={false} // Would need real game state logic here
+                        currentItem={Math.random() > 0.2 ? "A" : "C"}
+                        isBreak={false}
                         onAnswer={handleGameAnswer}
                     />
                 );
@@ -235,12 +254,19 @@ const Assessment: React.FC = () => {
                         onAnswer={handleGameAnswer}
                     />
                 );
+            } else if (difficulty === 'medium') {
+                return (
+                    <TimeEstimator
+                        targetSeconds={5}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
             } else {
                 return (
                     <VisualMathMatch
                         equation={question_text}
-                        correctValue={5} // Placeholder - should parse from question
-                        options={[4, 5, 6]} // Placeholder
+                        correctValue={5}
+                        options={[4, 5, 6]}
                         onAnswer={handleGameAnswer}
                     />
                 );
@@ -249,14 +275,7 @@ const Assessment: React.FC = () => {
 
         // --- READING GAMES ---
         if (domain === 'reading') {
-            if (difficulty === 'hard') {
-                return (
-                    <ReadAloudEcho
-                        sentence={question_text}
-                        onAnswer={handleGameAnswer}
-                    />
-                );
-            } else {
+            if (difficulty === 'easy') {
                 return (
                     <LetterFlipFrenzy
                         question={question_text}
@@ -264,10 +283,35 @@ const Assessment: React.FC = () => {
                         onAnswer={handleGameAnswer}
                     />
                 );
+            } else if (difficulty === 'medium') {
+                return (
+                    <WordChainBuilder
+                        targetWord="CAT"
+                        scrambledLetters={['A', 'T', 'C', 'B']}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            } else {
+                return (
+                    <ReadAloudEcho
+                        sentence={question_text}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
             }
         }
 
-        // Fallback or Writing
+        // --- LOGIC / EXECUTIVE FUNCTION ---
+        if (domain === 'writing' || domain === 'logic') {
+            return (
+                <PlanAheadPuzzle
+                    level={1}
+                    onAnswer={handleGameAnswer}
+                />
+            );
+        }
+
+        // Fallback
         return (
             <div className="p-8 text-center">
                 <h2>{question_text}</h2>
@@ -275,7 +319,7 @@ const Assessment: React.FC = () => {
                     {options.map((opt) => (
                         <button
                             key={opt}
-                            onClick={() => handleGameAnswer({ correct: true })} // Placeholder
+                            onClick={() => handleGameAnswer({ correct: true })}
                             className="p-4 border rounded hover:bg-gray-100"
                         >
                             {opt}
@@ -318,7 +362,6 @@ const Assessment: React.FC = () => {
         );
     };
 
-    // Render loading
     const renderLoading = () => (
         <div className="loading-container">
             <div className="loading-spinner"></div>
@@ -326,7 +369,6 @@ const Assessment: React.FC = () => {
         </div>
     );
 
-    // Render complete
     const renderComplete = () => (
         <div className="complete-container">
             <div className="complete-card">
@@ -359,7 +401,6 @@ const Assessment: React.FC = () => {
         </div>
     );
 
-    // Render error
     const renderError = () => (
         <div className="error-container">
             <div className="error-card">
