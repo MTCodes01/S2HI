@@ -111,3 +111,22 @@ export async function getDashboardData(
   });
 }
 
+/**
+ * Get user assessment history
+ */
+export async function getUserHistory(
+  userId: number
+): Promise<{
+  date: string;
+  time: string;
+  datetime: string;
+  session_id: string;
+  dyslexia_score: number;
+  dyscalculia_score: number;
+  attention_score: number;
+  risk_label: string;
+}[]> {
+  return apiRequest('/get-user-history/', { user_id: userId });
+}
+
+

@@ -660,3 +660,59 @@ class GetDashboardDataView(APIView):
         
         return "Continue current learning approach and monitor progress."
 
+
+class GetUserHistoryView(APIView):
+    """
+    POST /get-user-history/
+    
+    Get assessment history for a user to track improvement.
+    
+    Request:
+        {"user_id": 101}
+        
+    Response:
+        [
+            {
+                "date": "2024-01-15",
+                "dyslexia_score": 0.45,
+                "dyscalculia_score": 0.20,
+                "attention_score": 0.30,
+                "risk_label": "moderate"
+            },
+            ...
+        ]
+    """
+    
+    def post(self, request):
+        from .serializers import GetUserHistoryRequestSerializer
+        serializer = GetUserHistoryRequestSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_id = serializer.validated_data['user_id']
+        
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Get all completed sessions with predictions
+        predictions = FinalPrediction.objects.filter(
+            user=user
+        ).select_related('session').order_by('predicted_at')
+        
+        history_data = []
+        for pred in predictions:
+            history_data.append({
+                'date': pred.predicted_at.strftime('%Y-%m-%d'),
+                'dyslexia_score': pred.dyslexia_risk_score,
+                'dyscalculia_score': pred.dyscalculia_risk_score,
+                'attention_score': pred.attention_risk_score,
+                'risk_label': pred.final_label
+            })
+            
+        return Response(history_data, status=status.HTTP_200_OK)

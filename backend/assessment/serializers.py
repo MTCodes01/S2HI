@@ -65,6 +65,11 @@ class EndSessionResponseSerializer(serializers.Serializer):
     key_insights = serializers.ListField(child=serializers.CharField())
 
 
+class GetUserHistoryRequestSerializer(serializers.Serializer):
+    """Request serializer for getting user history."""
+    user_id = serializers.IntegerField()
+
+
 class GetDashboardDataRequestSerializer(serializers.Serializer):
     """Request serializer for getting dashboard data."""
     user_id = serializers.IntegerField()

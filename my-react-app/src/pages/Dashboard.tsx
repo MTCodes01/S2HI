@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import type { AssessmentResult, DashboardDataResponse } from "../types/types";
-import { getDashboardData } from "../services/api";
+import { getDashboardData, getUserHistory } from "../services/api";
+import ImprovementGraph from "../components/ImprovementGraph";
 import "../styles/dashboard.css";
 
 interface LocationState {
@@ -16,6 +17,8 @@ const Dashboard: React.FC = () => {
     const state = location.state as LocationState | null;
 
     const [dashboardData, setDashboardData] = useState<DashboardDataResponse | null>(null);
+    const [historyData, setHistoryData] = useState<any[]>([]); // Use appropriate type
+    const [showHistory, setShowHistory] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -30,8 +33,12 @@ const Dashboard: React.FC = () => {
             setError(null);
 
             try {
-                const data = await getDashboardData(state.userId!, state.sessionId!);
+                const [data, history] = await Promise.all([
+                    getDashboardData(state.userId!, state.sessionId!),
+                    getUserHistory(state.userId!)
+                ]);
                 setDashboardData(data);
+                setHistoryData(history);
             } catch (err) {
                 console.error('Failed to fetch dashboard data:', err);
                 setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -43,7 +50,8 @@ const Dashboard: React.FC = () => {
         fetchDashboardData();
     }, [hasSessionInfo, state?.userId, state?.sessionId]);
 
-    // Generate dashboard data from fetched data or use demo data
+    // ... (generateDashboardData function remains same) ...
+
     const generateDashboardData = () => {
         if (dashboardData) {
             // Use real data from backend
@@ -79,7 +87,7 @@ const Dashboard: React.FC = () => {
             };
         }
 
-        // Demo data when no real data available
+        // Demo data
         return {
             studentId: "STU-DEMO",
             ageGroup: "9–11",
@@ -113,9 +121,9 @@ const Dashboard: React.FC = () => {
     };
 
     const hasResults = dashboardData !== null;
-
     const studentData = generateDashboardData();
 
+    // ... (helper functions remain same) ...
     const getDomainIcon = (domain: string) => {
         switch (domain) {
             case 'reading': return '📚';
@@ -148,10 +156,11 @@ const Dashboard: React.FC = () => {
         ];
     };
 
-    // Show loading state
     if (isLoading) {
         return (
             <div className="dashboard-container">
+                <div className="ambient-orb orb-1"></div>
+                <div className="ambient-orb orb-2"></div>
                 <div style={{ textAlign: 'center', padding: '4rem' }}>
                     <h2>Loading dashboard data...</h2>
                 </div>
@@ -159,10 +168,11 @@ const Dashboard: React.FC = () => {
         );
     }
 
-    // Show error state
     if (error) {
         return (
             <div className="dashboard-container">
+                <div className="ambient-orb orb-1"></div>
+                <div className="ambient-orb orb-2"></div>
                 <div style={{ textAlign: 'center', padding: '4rem' }}>
                     <h2>Error loading dashboard</h2>
                     <p>{error}</p>
@@ -176,6 +186,10 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="dashboard-container">
+            {/* Ambient Background Elements */}
+            <div className="ambient-orb orb-1"></div>
+            <div className="ambient-orb orb-2"></div>
+
             {/* Header Section */}
             <header className="dashboard-header">
                 <div className="header-content">
@@ -207,11 +221,19 @@ const Dashboard: React.FC = () => {
 
             {/* Stats Overview Row */}
             <section className="stats-row">
-                <div className="stat-card">
+                <div
+                    className="stat-card"
+                    onClick={() => setShowHistory(true)}
+                    style={{ cursor: 'pointer', position: 'relative' }}
+                    title="Click to view full history"
+                >
                     <div className="stat-icon">📅</div>
                     <div className="stat-content">
                         <span className="stat-label">Assessment Date</span>
                         <span className="stat-value">{studentData.assessmentDate}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--primary)', marginTop: '4px' }}>
+                            👆 View History
+                        </span>
                     </div>
                 </div>
                 <div className="stat-card">
@@ -245,7 +267,69 @@ const Dashboard: React.FC = () => {
                 </div>
             </section>
 
-            {/* Main Content Grid */}
+            {/* History Modal */}
+            {showHistory && (
+                <div className="modal-overlay" onClick={() => setShowHistory(false)} style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(4px)'
+                }}>
+                    <div className="glass-panel" onClick={e => e.stopPropagation()} style={{
+                        maxWidth: '600px', width: '90%', padding: '2rem',
+                        animation: 'slideUpFade 0.4s ease-out',
+                        maxHeight: '80vh', overflowY: 'auto'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Assessment History</h2>
+                            <button
+                                onClick={() => setShowHistory(false)}
+                                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {historyData.length === 0 ? (
+                            <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No past assessments found.</p>
+                        ) : (
+                            <div className="history-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {historyData.map((session, index) => (
+                                    <div key={index} className="history-item" style={{
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        padding: '1rem',
+                                        background: 'rgba(255,255,255,0.5)',
+                                        border: '1px solid var(--glass-border)',
+                                        borderRadius: '12px'
+                                    }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={{ fontWeight: 600, fontSize: '1rem' }}>
+                                                {session.datetime ? new Date(session.datetime).toLocaleDateString() : session.date}
+                                            </span>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
+                                            </span>
+                                        </div>
+                                        <button className="btn btn-sm btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                                            View Report
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                Select an assessment to view detailed results.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+
+            {/* Main Content Grid ... (rest remains same) */}
             <div className="main-grid">
                 {/* Left Column - Student Info */}
                 <aside className="sidebar">
@@ -368,6 +452,30 @@ const Dashboard: React.FC = () => {
                             );
                         })}
                     </div>
+
+                    {/* Performance Trend Graph (Moved to bottom of content area) */}
+                    {hasResults && historyData.length > 0 && (
+                        <div className="graph-card" style={{ marginTop: '2rem', padding: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Performance Trends</h2>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                                        <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', marginRight: '5px' }}></span>
+                                        Reading
+                                    </span>
+                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                                        <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', marginRight: '5px' }}></span>
+                                        Math
+                                    </span>
+                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                                        <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#8b5cf6', marginRight: '5px' }}></span>
+                                        Focus
+                                    </span>
+                                </div>
+                            </div>
+                            <ImprovementGraph data={historyData} />
+                        </div>
+                    )}
                 </main>
             </div>
 

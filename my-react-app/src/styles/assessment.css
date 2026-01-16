@@ -14,7 +14,7 @@
 }
 
 .assessment-page {
-  min-height: calc(100vh - 80px); /* Adjust for navbar */
+  min-height: 100vh; /* Full viewport height */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,6 +23,8 @@
   position: relative;
   overflow: hidden;
 }
+
+
 
 /* ============================================
    GLASS PANEL & LAYOUT
@@ -593,8 +595,9 @@
 @media (max-width: 768px) {
   .assessment-page {
     padding: 1rem;
-    align-items: flex-start; /* Allow scrolling on small screens if content overflows */
-    overflow-y: auto;
+    align-items: center; /* Center vertically on mobile too */
+    justify-content: center;
+    min-height: 100vh;
   }
 
   .glass-panel,
