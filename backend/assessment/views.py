@@ -119,34 +119,82 @@ class GetNextQuestionView(APIView):
             import numpy as np
             from django.conf import settings
             
-            # Load question generator model (trained by team)
-            generator_path = os.path.join(settings.BASE_DIR, 'question_generator.pkl')
+            import sys
             
-            if os.path.exists(generator_path):
+            # Ensure the current directory is in sys.path so the unpickler can find 'question_generator_model'
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.append(current_dir)
+
+            # Load question generator model (trained by team)
+            # Check multiple locations and names
+            paths_to_check = [
+                os.path.join(current_dir, 'question_model.pkl'),       # Trained script output
+                os.path.join(settings.BASE_DIR, 'question_generator.pkl'), # Old location
+                os.path.join(settings.BASE_DIR, 'question_model.pkl')
+            ]
+            
+            generator_path = None
+            for path in paths_to_check:
+                if os.path.exists(path):
+                    generator_path = path
+                    break
+            
+            if generator_path:
                 generator = joblib.load(generator_path)
                 
                 # Get previous responses to determine current state
                 responses = UserResponse.objects.filter(session=session).order_by('-answered_at')
                 
+                # Calculate session accuracy
+                total_responses = responses.count()
+                correct_count = responses.filter(correct=True).count()
+                session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
+                
+                # Only 3 domains for assessment: reading, math, attention
+                domain_map = {'reading': 0, 'math': 1, 'attention': 2}
+                
                 if responses.exists():
                     last_response = responses.first()
-                    # Map domain names to IDs
-                    domain_map = {'reading': 0, 'writing': 0, 'math': 1, 'attention': 2, 'focus': 2}
-                    diff_map = {'easy': 0, 'medium': 1, 'hard': 2}
                     
-                    cur_domain = domain_map.get(last_response.domain, 0)
-                    cur_diff = diff_map.get(last_response.difficulty, 1)
+                    # 1. Last Correct
                     is_correct = 1 if correct else 0
-                    time_ms = response_time_ms or 2000
+                    
+                    # 2. Last Response Time
+                    time_ms = response_time_ms if response_time_ms is not None else 2000
+                    
+                    # 3-5. Difficulty One-Hot
+                    last_diff = last_response.difficulty
+                    d_easy = 1 if last_diff == 'easy' else 0
+                    d_medium = 1 if last_diff == 'medium' else 0
+                    d_hard = 1 if last_diff == 'hard' else 0
+                    
+                    # 6. Session Accuracy (computed above)
+                    
+                    # 7. Current Domain (integer) - map to 0, 1, or 2
+                    cur_domain = domain_map.get(last_response.domain, 0)
+                    
                 else:
-                    # First question - start with reading, easy
-                    cur_domain = 0
-                    cur_diff = 0
+                    # First question defaults
                     is_correct = 1
-                    time_ms = 2000
+                    time_ms = 0
+                    d_easy = 1
+                    d_medium = 0
+                    d_hard = 0
+                    session_accuracy = 1.0
+                    cur_domain = 0
                 
-                # Prepare features for model: [cur_domain, cur_diff, correct, time_ms]
-                features = np.array([[cur_domain, cur_diff, is_correct, time_ms]])
+                # Prepare features for model: 
+                # [last_correct, last_response_time, diff_easy, diff_medium, diff_hard, session_accuracy, current_domain]
+                features = np.array([[
+                    is_correct, 
+                    time_ms, 
+                    d_easy, 
+                    d_medium, 
+                    d_hard, 
+                    session_accuracy, 
+                    cur_domain
+                ]])
                 
                 # Predict next domain and difficulty
                 prediction = generator.predict(features)
@@ -160,12 +208,37 @@ class GetNextQuestionView(APIView):
                     next_domain_idx = 0
                     next_diff_idx = 1
                 
-                # Map indices to names
+                # Map indices to names (only 3 domains)
                 domain_names = {0: 'reading', 1: 'math', 2: 'attention'}
                 diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
                 
-                next_domain = domain_names.get(next_domain_idx, 'reading')
+                # Apply domain rotation to ensure variety
+                # Count how many times each domain has appeared
+                domain_counts = {
+                    'reading': responses.filter(domain='reading').count(),
+                    'math': responses.filter(domain='math').count(),
+                    'attention': responses.filter(domain='attention').count()
+                }
+                
+                # Get predicted domain
+                predicted_domain = domain_names.get(next_domain_idx, 'reading')
+                
+                # If predicted domain has appeared 3+ times more than another domain, rotate
+                min_count = min(domain_counts.values()) if domain_counts else 0
+                max_count = max(domain_counts.values()) if domain_counts else 0
+                
+                if domain_counts.get(predicted_domain, 0) >= min_count + 3:
+                    # Force rotation to least-used domain
+                    next_domain = min(domain_counts, key=domain_counts.get)
+                    print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
+                else:
+                    next_domain = predicted_domain
+                
                 next_difficulty = diff_names.get(next_diff_idx, 'medium')
+                
+                # Debug logging
+                print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
+                print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
                 
                 # Check if session should end (15-20 questions)
                 response_count = UserResponse.objects.filter(session=session).count()

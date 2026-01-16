@@ -28,8 +28,34 @@ def load_question_model():
     """Load the question generation ML model from disk."""
     global _question_model
     if _question_model is None:
-        _question_model = joblib.load(QUESTION_MODEL_PATH)
-        print(f"✅ Loaded question generation model from {QUESTION_MODEL_PATH}")
+        import sys
+        
+        # Ensure the current directory is in sys.path so the unpickler can find 'question_generator_model'
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if current_dir not in sys.path:
+            sys.path.append(current_dir)
+            
+        # Check multiple locations
+        paths_to_check = [
+            os.path.join(current_dir, 'question_model.pkl'),       # Trained script output
+            os.path.join(settings.BASE_DIR, 'question_generator.pkl'), # Old location
+        ]
+        
+        model_path = None
+        for path in paths_to_check:
+            if os.path.exists(path):
+                model_path = path
+                break
+        
+        if model_path:
+            try:
+                _question_model = joblib.load(model_path)
+                print(f"✅ Loaded question generation model from {model_path}")
+            except Exception as e:
+                 print(f"❌ Failed to load question model from {model_path}: {e}")
+        else:
+             print("⚠️  No question generation model found.")
+
     return _question_model
 
 
@@ -60,10 +86,10 @@ class PlaceholderQuestionModel:
         Generate next question parameters based on features.
         
         Args:
-            features: Array of shape (1, 10) with:
+        Args:
+            features: Array of shape (1, 7) with:
                 [last_correct, last_response_time, last_diff_easy, last_diff_medium, 
-                 last_diff_hard, session_accuracy, reading_count, writing_count, 
-                 math_count, attention_count]
+                 last_diff_hard, session_accuracy, current_domain]
         
         Returns:
             Array of shape (2,) with [domain_index, difficulty_index]
@@ -75,7 +101,8 @@ class PlaceholderQuestionModel:
         last_diff_easy = features[0][2]
         last_diff_medium = features[0][3]
         last_diff_hard = features[0][4]
-        domain_counts = features[0][6:10]  # [reading, writing, math, attention]
+        # session_accuracy = features[0][5]  # Unused in simple logic
+        current_domain = features[0][6]
         
         # Determine current difficulty from one-hot encoding
         if last_diff_easy:
@@ -96,8 +123,8 @@ class PlaceholderQuestionModel:
             # Keep same difficulty
             next_difficulty = current_difficulty
         
-        # Domain rotation: choose domain with fewest questions
-        next_domain = int(np.argmin(domain_counts))
+        # Domain rotation: simple cycle since we don't have counts in features anymore
+        next_domain = (int(current_domain) + 1) % 4
         
         return np.array([next_domain, next_difficulty])
 
@@ -173,7 +200,7 @@ def extract_question_features(
             1000,   # last_response_time
             1, 0, 0,  # last_difficulty (easy)
             1.0,    # session_accuracy (100% for first)
-            0, 0, 0, 0  # domain counts (all zero)
+            0       # current_domain (reading)
         ]])
     
     # Get last question difficulty
@@ -196,12 +223,22 @@ def extract_question_features(
     else:
         session_accuracy = 1.0 if correct else 0.0
     
-    # Count questions per domain
-    reading_count = responses.filter(domain='reading').count()
-    writing_count = responses.filter(domain='writing').count()
-    math_count = responses.filter(domain='math').count()
-    attention_count = responses.filter(domain='attention').count()
+    # Map domain to integer (only 3 domains for assessment)
+    domain_map = {'reading': 0, 'math': 1, 'attention': 2}
     
+    # Get last domain
+    last_domain = 'reading' # Default
+    if last_question_id:
+        try:
+             # We already fetched last_question above if it existed, but let's be safe
+             q_obj = Question.objects.get(question_id=last_question_id)
+             last_domain = q_obj.domain
+        except Question.DoesNotExist:
+             pass
+             
+    cur_domain_val = domain_map.get(last_domain, 0)
+
+    # 7 features: [last_correct, last_response_time, diff_easy, diff_medium, diff_hard, session_accuracy, current_domain]
     features = np.array([[
         1 if correct else 0,  # last_correct
         response_time_ms,     # last_response_time
@@ -209,10 +246,7 @@ def extract_question_features(
         diff_medium,          # last_difficulty_medium
         diff_hard,            # last_difficulty_hard
         session_accuracy,     # session_accuracy
-        reading_count,        # domain_reading_count
-        writing_count,        # domain_writing_count
-        math_count,           # domain_math_count
-        attention_count       # domain_attention_count
+        cur_domain_val        # current_domain
     ]])
     
     return features

@@ -322,7 +322,6 @@ const Assessment: React.FC = () => {
                 <div className="error-icon">⚠️</div>
                 <h2>Something went wrong</h2>
                 <p>{error}</p>
-                <p className="error-hint">Make sure the backend server is running on localhost:8000</p>
                 <button className="retry-btn" onClick={handleRestart}>
                     Try Again
                 </button>
