@@ -65,7 +65,7 @@ export default function WordChainBuilder({ targetWord, scrambledLetters, onAnswe
                 correct,
                 responseTime,
                 moves,
-                mistakeType: correct ? undefined : "sequencing_error"
+                mistakeType: correct ? undefined : "sequence_error"
             });
         }, 500);
     };

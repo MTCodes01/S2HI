@@ -317,10 +317,12 @@ const Assessment: React.FC = () => {
                     />
                 );
             } else if (difficulty === 'medium') {
+                const target = currentQuestion.correct_option || "READ";
+                const shuffled = target.toUpperCase().split('').sort(() => Math.random() - 0.5);
                 return (
                     <WordChainBuilder
-                        targetWord={currentQuestion.correct_option || "READ"}
-                        scrambledLetters={currentQuestion.options || ['R', 'E', 'A', 'D', 'S']}
+                        targetWord={target}
+                        scrambledLetters={shuffled}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
