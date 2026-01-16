@@ -14,28 +14,101 @@ try:
 except ImportError:
     HAS_JOBLIB = False
 
-# Path to the ML model
-MODEL_PATH = os.path.join(settings.BASE_DIR, 'ld_model.pkl')
+# Paths to the ML models
+QUESTION_MODEL_PATH = os.path.join(settings.BASE_DIR, 'question_model.pkl')
+PREDICTION_MODEL_PATH = os.path.join(settings.BASE_DIR, 'prediction_model.pkl')
 
-# Global model instance
-_model = None
+# Global model instances
+_question_model = None
+_prediction_model = None
 
 
-def load_model():
-    """Load the ML model from disk."""
-    global _model
-    if _model is None:
-        if HAS_JOBLIB and os.path.exists(MODEL_PATH):
-            _model = joblib.load(MODEL_PATH)
+def load_question_model():
+    """Load the question generation ML model from disk."""
+    global _question_model
+    if _question_model is None:
+        if HAS_JOBLIB and os.path.exists(QUESTION_MODEL_PATH):
+            _question_model = joblib.load(QUESTION_MODEL_PATH)
+            print(f"✅ Loaded question generation model from {QUESTION_MODEL_PATH}")
         else:
             # Use placeholder model if joblib not available or file doesn't exist
-            _model = PlaceholderModel()
-    return _model
+            _question_model = PlaceholderQuestionModel()
+            print("⚠️  Using rule-based question selection (question_model.pkl not found)")
+    return _question_model
 
 
-class PlaceholderModel:
+def load_prediction_model():
+    """Load the final prediction ML model from disk."""
+    global _prediction_model
+    if _prediction_model is None:
+        if HAS_JOBLIB and os.path.exists(PREDICTION_MODEL_PATH):
+            _prediction_model = joblib.load(PREDICTION_MODEL_PATH)
+            print(f"✅ Loaded prediction model from {PREDICTION_MODEL_PATH}")
+        else:
+            # Use placeholder model if joblib not available or file doesn't exist
+            _prediction_model = PlaceholderPredictionModel()
+            print("⚠️  Using rule-based prediction (prediction_model.pkl not found)")
+    return _prediction_model
+
+
+
+
+class PlaceholderQuestionModel:
     """
-    Placeholder model for development/testing when actual model is not available.
+    Placeholder model for question generation when actual model is not available.
+    Uses rule-based logic to determine next question domain and difficulty.
+    """
+    
+    def predict(self, features: np.ndarray) -> np.ndarray:
+        """
+        Generate next question parameters based on features.
+        
+        Args:
+            features: Array of shape (1, 10) with:
+                [last_correct, last_response_time, last_diff_easy, last_diff_medium, 
+                 last_diff_hard, session_accuracy, reading_count, writing_count, 
+                 math_count, attention_count]
+        
+        Returns:
+            Array of shape (2,) with [domain_index, difficulty_index]
+            domain_index: 0=reading, 1=writing, 2=math, 3=attention
+            difficulty_index: 0=easy, 1=medium, 2=hard
+        """
+        last_correct = features[0][0]
+        last_response_time = features[0][1]
+        last_diff_easy = features[0][2]
+        last_diff_medium = features[0][3]
+        last_diff_hard = features[0][4]
+        domain_counts = features[0][6:10]  # [reading, writing, math, attention]
+        
+        # Determine current difficulty from one-hot encoding
+        if last_diff_easy:
+            current_difficulty = 0  # easy
+        elif last_diff_medium:
+            current_difficulty = 1  # medium
+        else:
+            current_difficulty = 2  # hard
+        
+        # Adaptive difficulty logic (matching DB/logic.py thresholds)
+        if last_correct and last_response_time < 900:
+            # Fast and correct → harder
+            next_difficulty = min(2, current_difficulty + 1)
+        elif not last_correct or last_response_time > 1400:
+            # Wrong or slow → easier
+            next_difficulty = max(0, current_difficulty - 1)
+        else:
+            # Keep same difficulty
+            next_difficulty = current_difficulty
+        
+        # Domain rotation: choose domain with fewest questions
+        next_domain = int(np.argmin(domain_counts))
+        
+        return np.array([next_domain, next_difficulty])
+
+
+class PlaceholderPredictionModel:
+    """
+    Placeholder model for final prediction when actual model is not available.
     Returns risk scores based on feature analysis.
     """
     
@@ -48,11 +121,28 @@ class PlaceholderModel:
         accuracy = features[0][0] if features.shape[1] > 0 else 0.5
         avg_response_time = features[0][1] if features.shape[1] > 1 else 2000
         error_rate = features[0][2] if features.shape[1] > 2 else 0.5
+        reading_accuracy = features[0][4] if features.shape[1] > 4 else 0.5
+        math_accuracy = features[0][5] if features.shape[1] > 5 else 0.5
+        letter_reversal_count = features[0][6] if features.shape[1] > 6 else 0
         
         # Simple rule-based risk calculation
-        dyslexia_risk = min(1.0, (1 - accuracy) * 0.7 + (error_rate * 0.3))
-        dyscalculia_risk = min(1.0, (1 - accuracy) * 0.5 + (avg_response_time / 5000) * 0.5)
-        attention_risk = min(1.0, (avg_response_time / 5000) * 0.6 + (1 - accuracy) * 0.4)
+        dyslexia_risk = min(1.0, 
+            (1 - accuracy) * 0.4 + 
+            (1 - reading_accuracy) * 0.3 + 
+            (letter_reversal_count / 5) * 0.3
+        )
+        
+        dyscalculia_risk = min(1.0, 
+            (1 - accuracy) * 0.3 + 
+            (1 - math_accuracy) * 0.4 + 
+            (avg_response_time / 5000) * 0.3
+        )
+        
+        attention_risk = min(1.0, 
+            (avg_response_time / 5000) * 0.5 + 
+            (1 - accuracy) * 0.3 +
+            (error_rate * 0.2)
+        )
         
         return np.array([[dyslexia_risk, dyscalculia_risk, attention_risk]])
 
