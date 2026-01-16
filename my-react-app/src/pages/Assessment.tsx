@@ -239,22 +239,26 @@ const Assessment: React.FC = () => {
         // --- ATTENTION GAMES ---
         if (domain === 'attention') {
             if (difficulty === 'easy') {
+                const isRed = (options || []).includes('red');
                 return (
                     <FocusGuard
-                        stimulus={Math.random() > 0.3 ? "green" : "red"}
+                        stimulus={Math.random() > 0.5 ? "green" : (isRed ? "red" : "green")}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
                 );
             } else if (difficulty === 'medium') {
+                const rule = (options && options[0]) || "COLOR";
                 return (
                     <TaskSwitchSprint
-                        initialRule="COLOR"
+                        initialRule={rule as any}
                         items={[
                             { shape: 'circle', color: 'blue' },
                             { shape: 'square', color: 'orange' },
                             { shape: 'circle', color: 'orange' },
-                            { shape: 'square', color: 'blue' }
+                            { shape: 'square', color: 'blue' },
+                            { shape: 'circle', color: 'orange' },
+                            { shape: 'circle', color: 'blue' }
                         ]}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
@@ -263,9 +267,6 @@ const Assessment: React.FC = () => {
             } else {
                 return (
                     <PatternWatcher
-                        expectedPattern={["A", "B", "A", "B"]}
-                        currentItem={Math.random() > 0.2 ? "A" : "C"}
-                        isBreak={false}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -285,19 +286,22 @@ const Assessment: React.FC = () => {
                     />
                 );
             } else if (difficulty === 'medium') {
+                const target = parseInt(currentQuestion.correct_option || "5");
                 return (
                     <TimeEstimator
-                        targetSeconds={5}
+                        targetSeconds={target}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
                 );
             } else {
+                const val = parseInt(currentQuestion.correct_option || "8");
+                const opts = (options || ["7", "8", "9"]).map(o => parseInt(o));
                 return (
                     <VisualMathMatch
                         equation={question_text}
-                        correctValue={5}
-                        options={[4, 5, 6]}
+                        correctValue={val}
+                        options={opts}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -342,14 +346,14 @@ const Assessment: React.FC = () => {
         if (domain === 'writing' || domain === 'logic') {
             return (
                 <PlanAheadPuzzle
-                    level={1}
+                    level={difficulty === 'hard' ? 2 : 1}
                     onAnswer={handleGameAnswer}
                     ageGroup={ageGroup}
                 />
             );
         }
 
-        // Fallback
+        // Fallback for unexpected domains
         return (
             <div className="p-8 text-center">
                 <h2>{question_text}</h2>
