@@ -5,6 +5,14 @@ import type { Question, AssessmentResult } from '../types/types';
 import Mascot from '../components/Mascot';
 import '../styles/assessment.css';
 
+// Game Imports
+import FocusGuard from '../games/FocusGuard';
+import PatternWatcher from '../games/PatternWatcher';
+import LetterFlipFrenzy from '../games/LetterFlipFrenzy';
+import ReadAloudEcho from '../games/ReadAloudEcho';
+import NumberSenseDash from '../games/NumberSenseDash';
+import VisualMathMatch from '../games/VisualMathMatch';
+
 type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'complete' | 'error';
 
 const Assessment: React.FC = () => {
@@ -17,7 +25,6 @@ const Assessment: React.FC = () => {
 
     // Question state
     const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-    const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [questionNumber, setQuestionNumber] = useState(0);
 
     // UI state
@@ -62,33 +69,16 @@ const Assessment: React.FC = () => {
         }
     };
 
-    // Handle answer selection and submission
-    const handleSubmitAnswer = async () => {
-        if (!currentQuestion || !selectedAnswer || !userId || !sessionId) return;
+    // Generic handler for all games to submit their results
+    const handleGameAnswer = async (result: any) => {
+        if (!currentQuestion || !userId || !sessionId) return;
 
         setPhase('loading');
-        const responseTime = Date.now() - startTimeRef.current;
 
-        // Determine if answer is correct (first option is always correct in this demo)
-        const isCorrect = selectedAnswer === currentQuestion.options[0];
-
-        // Determine mistake type based on domain
-        let mistakeType: string | undefined;
-        if (!isCorrect) {
-            switch (currentQuestion.domain) {
-                case 'reading':
-                    mistakeType = 'letter_reversal';
-                    break;
-                case 'math':
-                    mistakeType = 'calculation_error';
-                    break;
-                case 'attention':
-                    mistakeType = 'sequence_error';
-                    break;
-                default:
-                    mistakeType = 'substitution';
-            }
-        }
+        // Normalize result types from different games
+        const isCorrect = result.correct !== undefined ? result.correct : (result.accuracy > 0.8);
+        const responseTime = result.responseTime || (Date.now() - startTimeRef.current);
+        const mistakeType = result.mistakeType || (isCorrect ? undefined : "general_error");
 
         try {
             // Submit the answer
@@ -118,7 +108,6 @@ const Assessment: React.FC = () => {
                 setPhase('complete');
             } else {
                 setCurrentQuestion(nextQuestion);
-                setSelectedAnswer(null);
                 setQuestionNumber(prev => prev + 1);
                 startTimeRef.current = Date.now();
                 setPhase('question');
@@ -146,14 +135,13 @@ const Assessment: React.FC = () => {
         setUserId(null);
         setSessionId(null);
         setCurrentQuestion(null);
-        setSelectedAnswer(null);
         setQuestionNumber(0);
         setResults(null);
         setError(null);
         setPhase('welcome');
     };
 
-    // Render welcome screen with Mascot and simplified UI
+    // Render welcome screen
     const renderWelcome = () => (
         <div className={`assessment-welcome smooth-fade-in`}>
             <div className="welcome-card glass-panel">
@@ -205,13 +193,100 @@ const Assessment: React.FC = () => {
                 </div>
             </div>
 
-            {/* Ambient Background Elements */}
             <div className="ambient-orb orb-1"></div>
             <div className="ambient-orb orb-2"></div>
         </div>
     );
 
-    // Render question
+    // Render the specific game component based on question domain/type
+    const renderGameComponent = () => {
+        if (!currentQuestion) return null;
+
+        const { domain, difficulty, question_text, options } = currentQuestion;
+
+        // --- ATTENTION GAMES ---
+        if (domain === 'attention') {
+            if (difficulty === 'easy' || difficulty === 'medium') {
+                return (
+                    <FocusGuard
+                        stimulus={Math.random() > 0.3 ? "green" : "red"} // Randomize stimulus for demo
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            } else {
+                return (
+                    <PatternWatcher
+                        expectedPattern={["A", "B", "A", "B"]}
+                        currentItem={Math.random() > 0.2 ? "A" : "C"} // Demo logic
+                        isBreak={false} // Would need real game state logic here
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            }
+        }
+
+        // --- MATH GAMES ---
+        if (domain === 'math') {
+            if (difficulty === 'easy') {
+                return (
+                    <NumberSenseDash
+                        left={Math.floor(Math.random() * 20)}
+                        right={Math.floor(Math.random() * 20)}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            } else {
+                return (
+                    <VisualMathMatch
+                        equation={question_text}
+                        correctValue={5} // Placeholder - should parse from question
+                        options={[4, 5, 6]} // Placeholder
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            }
+        }
+
+        // --- READING GAMES ---
+        if (domain === 'reading') {
+            if (difficulty === 'hard') {
+                return (
+                    <ReadAloudEcho
+                        sentence={question_text}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            } else {
+                return (
+                    <LetterFlipFrenzy
+                        question={question_text}
+                        options={options}
+                        onAnswer={handleGameAnswer}
+                    />
+                );
+            }
+        }
+
+        // Fallback or Writing
+        return (
+            <div className="p-8 text-center">
+                <h2>{question_text}</h2>
+                <div className="grid gap-4 mt-4">
+                    {options.map((opt) => (
+                        <button
+                            key={opt}
+                            onClick={() => handleGameAnswer({ correct: true })} // Placeholder
+                            className="p-4 border rounded hover:bg-gray-100"
+                        >
+                            {opt}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    // Render question container
     const renderQuestion = () => {
         if (!currentQuestion) return null;
 
@@ -220,13 +295,6 @@ const Assessment: React.FC = () => {
             writing: '#9b59b6',
             math: '#2ecc71',
             attention: '#ffc857'
-        };
-
-        const domainIcons: Record<string, string> = {
-            reading: '📚',
-            writing: '✏️',
-            math: '🔢',
-            attention: '🎯'
         };
 
         return (
@@ -238,37 +306,13 @@ const Assessment: React.FC = () => {
                             className="domain-badge"
                             style={{ backgroundColor: `${domainColors[currentQuestion.domain]}20`, color: domainColors[currentQuestion.domain] }}
                         >
-                            {domainIcons[currentQuestion.domain]} {currentQuestion.domain}
+                            {currentQuestion.domain}
                         </div>
-                    </div>
-                    <div className="difficulty-badge" data-difficulty={currentQuestion.difficulty}>
-                        {currentQuestion.difficulty}
                     </div>
                 </div>
 
-                <div className="question-card">
-                    <h2 className="question-text">{currentQuestion.question_text}</h2>
-
-                    <div className="options-grid">
-                        {currentQuestion.options.map((option, index) => (
-                            <button
-                                key={index}
-                                className={`option-btn ${selectedAnswer === option ? 'selected' : ''}`}
-                                onClick={() => setSelectedAnswer(option)}
-                            >
-                                <span className="option-letter">{String.fromCharCode(65 + index)}</span>
-                                <span className="option-text">{option}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        className="submit-btn"
-                        disabled={!selectedAnswer}
-                        onClick={handleSubmitAnswer}
-                    >
-                        Next Question →
-                    </button>
+                <div className="question-card game-wrapper">
+                    {renderGameComponent()}
                 </div>
             </div>
         );
