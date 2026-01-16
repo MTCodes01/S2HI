@@ -140,11 +140,12 @@ const Assessment: React.FC = () => {
         if (!userId || !sessionId) return;
         setPhase('loading');
         try {
-            const sessionResults = await endSession(userId, sessionId);
             // Map score to type
             let confLevel: "low" | "moderate" | "high" = "moderate";
             if (confidenceScore < 35) confLevel = "low";
             else if (confidenceScore > 75) confLevel = "high";
+
+            const sessionResults = await endSession(userId, sessionId, confLevel);
 
             setResults({ ...sessionResults, confidence_level: confLevel });
             setPhase('complete');

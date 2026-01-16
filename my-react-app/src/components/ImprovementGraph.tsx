@@ -137,7 +137,7 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
                         bottom: 20,
                     }}
                 >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" vertical={false} />
 
                     <XAxis
                         dataKey={(item) => item.datetime ? new Date(item.datetime).getTime() : new Date(item.date).getTime()}
@@ -145,16 +145,16 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
                         tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         type="number" // Use time scale
                         scale="time"
-                        stroke="var(--text-muted)"
-                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                        stroke="#475569"
+                        tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
                         tickLine={false}
                         axisLine={false}
                         dy={10}
                     />
 
                     <YAxis
-                        stroke="var(--text-muted)"
-                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                        stroke="#475569"
+                        tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
                         tickLine={false}
                         axisLine={false}
                         domain={[0, 1]}
