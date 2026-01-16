@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import "../styles/LetterFlipFrenzy.css";
 
 type ReadingResult = {
@@ -37,14 +37,14 @@ export default function ReadingGame({ question, options, onAnswer }: Props) {
     }, [question]);
 
     return (
-        <div className="flex flex-col gap-4">
-            <h2 className="text-xl">{question}</h2>
-            <div className="grid grid-cols-2 gap-4">
+        <div className="reading-game-container">
+            <h2 className="reading-question">{question}</h2>
+            <div className="reading-options-grid">
                 {options.map(opt => (
                     <button
                         key={opt}
                         onClick={() => handleClick(opt)}
-                        className="p-4 border rounded-lg hover:bg-gray-100"
+                        className="reading-option-button"
                     >
                         {opt}
                     </button>

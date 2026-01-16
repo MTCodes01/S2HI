@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "../styles/PatternWatcher.css";
 
 type PatternResult = {
     correct: boolean;
@@ -13,7 +14,6 @@ type Props = {
     onAnswer: (result: PatternResult) => void;
 };
 
-import "../styles/PatternWatcher.css";
 export default function PatternWatcher({
     expectedPattern,
     currentItem,
@@ -59,14 +59,17 @@ export default function PatternWatcher({
     }, [isBreak, responded, onAnswer]);
 
     return (
-        <div className="flex flex-col items-center gap-6">
-            <h2 className="text-xl font-semibold">Tap when the pattern breaks</h2>
+        <div className="pattern-watcher-container">
+            <h2 className="pattern-watcher-heading">Tap when the pattern breaks</h2>
 
-            <div className="text-5xl">{currentItem}</div>
+            <div className="pattern-display">
+                <div className={`pattern-item ${isBreak ? "is-break" : ""}`}>{currentItem}</div>
+            </div>
 
             <button
                 onClick={handleClick}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg"
+                className="pattern-action-button"
+                disabled={responded}
             >
                 Tap
             </button>

@@ -56,13 +56,12 @@ export default function FocusGuard({ stimulus, onAnswer }: Props) {
     }, [stimulus, clicked, onAnswer]);
 
     return (
-        <div className="flex flex-col items-center gap-6">
-            <h2 className="text-xl font-semibold">Tap GREEN. Ignore RED.</h2>
+        <div className="focus-guard-container">
+            <h2 className="focus-guard-heading">Tap GREEN. Ignore RED.</h2>
 
             <button
                 onClick={handleClick}
-                className={`w-32 h-32 rounded-full ${stimulus === "green" ? "bg-green-500" : "bg-red-500"
-                    }`}
+                className={`focus-target-button ${stimulus === "green" ? "green" : "red"} ${clicked ? "clicked" : ""}`}
             />
         </div>
     );
