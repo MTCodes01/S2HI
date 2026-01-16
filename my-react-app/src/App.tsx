@@ -1,12 +1,17 @@
-import "./styles/global.css";
-import HomePage from "./pages/HomePage";
-import Navbar from "./components/Navbar";
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import './styles/global.css';
+import Navbar from './components/Navbar';
+import Assessment from './pages/Assessment';
+import Dashboard from './pages/Dashboard';
 
 export default function App() {
   return (
-    <>
+    <BrowserRouter>
       <Navbar />
-      <HomePage />
-    </>
+      <Routes>
+        <Route path="/" element={<Assessment />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

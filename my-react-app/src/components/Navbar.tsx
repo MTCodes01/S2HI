@@ -1,18 +1,29 @@
+import '../styles/global.css';
+import { Link, useLocation } from 'react-router-dom';
+
 export default function Navbar() {
-  return (
-    <nav style={{
-      padding: "16px 32px",
-      borderBottom: "1px solid #1e293b",
-      background: "#020617",
-      display: "flex",
-      justifyContent: "space-between"
-    }}>
-      <strong>🌌 Cosmic Explorer</strong>
-      <div style={{ display: "flex", gap: 20 }}>
-        <span>Home</span>
-        <span>Explore</span>
-        <span>About</span>
-      </div>
-    </nav>
-  );
+    const location = useLocation();
+
+    return (
+        <nav className="navbar">
+            <Link to="/" className="navbar-brand">
+                <span className="navbar-brand-icon">🧠</span>
+                S2HI Assessment
+            </Link>
+            <div className="navbar-links">
+                <Link
+                    to="/"
+                    className={`navbar-link ${location.pathname === '/' ? 'active' : ''}`}
+                >
+                    Assessment
+                </Link>
+                <Link
+                    to="/dashboard"
+                    className={`navbar-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
+                >
+                    Dashboard
+                </Link>
+            </div>
+        </nav>
+    );
 }
