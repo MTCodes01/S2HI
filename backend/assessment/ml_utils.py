@@ -223,8 +223,8 @@ def extract_question_features(
     else:
         session_accuracy = 1.0 if correct else 0.0
     
-    # Map domain to integer
-    domain_map = {'reading': 0, 'writing': 0, 'math': 1, 'attention': 2, 'focus': 2}
+    # Map domain to integer (only 3 domains for assessment)
+    domain_map = {'reading': 0, 'math': 1, 'attention': 2}
     
     # Get last domain
     last_domain = 'reading' # Default
