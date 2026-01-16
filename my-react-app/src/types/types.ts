@@ -13,6 +13,7 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   question_text: string;
   options: string[];
+  correct_option?: string;
   end_session?: boolean;
   message?: string;
 }
@@ -74,7 +75,7 @@ export interface AssessmentState {
   error: string | null;
 }
 
-export type MistakeType = 
+export type MistakeType =
   | 'letter_reversal'
   | 'number_reversal'
   | 'spelling_error'

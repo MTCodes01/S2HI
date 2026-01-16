@@ -55,9 +55,16 @@ const Assessment: React.FC = () => {
         setError(null);
 
         try {
-            const session = await startSession(ageGroup);
+            // Check for existing user ID
+            const storedUserId = localStorage.getItem('s2hi_user_id');
+            const existingId = storedUserId ? parseInt(storedUserId) : undefined;
+
+            const session = await startSession(ageGroup, existingId);
             setUserId(session.user_id);
             setSessionId(session.session_id);
+
+            // Persist user ID
+            localStorage.setItem('s2hi_user_id', session.user_id.toString());
 
             // Get first question
             const question = await getNextQuestion(session.user_id, session.session_id);
@@ -312,8 +319,8 @@ const Assessment: React.FC = () => {
             } else if (difficulty === 'medium') {
                 return (
                     <WordChainBuilder
-                        targetWord="CAT"
-                        scrambledLetters={['A', 'T', 'C', 'B']}
+                        targetWord={currentQuestion.correct_option || "READ"}
+                        scrambledLetters={currentQuestion.options || ['R', 'E', 'A', 'D', 'S']}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />

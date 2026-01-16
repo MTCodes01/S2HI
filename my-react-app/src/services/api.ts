@@ -33,8 +33,11 @@ async function apiRequest<T>(
  * Start a new assessment session
  * @param ageGroup - User's age group (e.g., "6-8", "9-11", "12-14")
  */
-export async function startSession(ageGroup: string): Promise<SessionResponse> {
-  return apiRequest<SessionResponse>('/start-session/', { age_group: ageGroup });
+export async function startSession(ageGroup: string, userId?: number): Promise<SessionResponse> {
+  return apiRequest<SessionResponse>('/start-session/', {
+    age_group: ageGroup,
+    user_id: userId
+  });
 }
 
 /**

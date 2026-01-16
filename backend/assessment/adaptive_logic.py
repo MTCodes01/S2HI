@@ -46,13 +46,12 @@ def get_next_domain(session_id: str, current_domain: str = None) -> str:
     for domain in domains:
         domain_counts[domain] = responses.filter(domain=domain).count()
     
-    # Return the domain with fewest responses
+    # Return a random domain from those with fewest responses
     min_count = min(domain_counts.values())
-    for domain in domains:
-        if domain_counts[domain] == min_count:
-            return domain
+    candidates = [d for d in domains if domain_counts[d] == min_count]
     
-    return 'reading'
+    import random
+    return random.choice(candidates) if candidates else random.choice(domains)
 
 
 def get_adaptive_question(
@@ -110,26 +109,41 @@ def get_adaptive_question(
         # Get next domain
         next_domain = get_next_domain(session_id, None)
     
-    # Try to find a question matching criteria
-    question = Question.objects.filter(
+    # Try to find a random question matching criteria
+    candidates = list(Question.objects.filter(
         domain=next_domain,
         difficulty=next_difficulty
-    ).exclude(question_id__in=answered_ids).first()
+    ).exclude(question_id__in=answered_ids))
+    
+    if candidates:
+        import random
+        return random.choice(candidates)
+    
+    question = None
     
     # Fallback: try any difficulty in the domain
     if not question:
-        question = Question.objects.filter(
+        candidates = list(Question.objects.filter(
             domain=next_domain
-        ).exclude(question_id__in=answered_ids).first()
+        ).exclude(question_id__in=answered_ids))
+        if candidates:
+            import random
+            question = random.choice(candidates)
     
     # Fallback: try any domain with target difficulty
     if not question:
-        question = Question.objects.filter(
+        candidates = list(Question.objects.filter(
             difficulty=next_difficulty
-        ).exclude(question_id__in=answered_ids).first()
+        ).exclude(question_id__in=answered_ids))
+        if candidates:
+             import random
+             question = random.choice(candidates)
     
     # Final fallback: any unanswered question
     if not question:
-        question = Question.objects.exclude(question_id__in=answered_ids).first()
+        candidates = list(Question.objects.exclude(question_id__in=answered_ids))
+        if candidates:
+             import random
+             question = random.choice(candidates)
     
     return question

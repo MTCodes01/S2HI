@@ -57,7 +57,7 @@ const CustomTooltip = ({ active, payload }: any) => {
                             </span>
                         </div>
                         <span style={{ fontWeight: 'bold', color: entry.color }}>
-                            {(entry.value * 100).toFixed(0)}%
+                            {(entry.value * 100).toFixed(0)}% (Proficiency)
                         </span>
                     </div>
                 ))}
@@ -159,6 +159,7 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
                         axisLine={false}
                         domain={[0, 1]}
                         tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
+                        label={{ value: 'Proficiency Score', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#64748b', fontSize: 12 } }}
                     />
 
                     <Tooltip
@@ -173,9 +174,9 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
                         wrapperStyle={{ paddingBottom: '20px' }}
                     />
 
-                    {/* Risk Threshold Lines */}
+                    {/* Proficiency Threshold Lines - High is Good */}
                     <ReferenceLine y={0.8} stroke="rgba(16, 185, 129, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Excellent', fill: '#10b981', fontSize: 10 }} />
-                    <ReferenceLine y={0.5} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Needs Work', fill: '#f59e0b', fontSize: 10 }} />
+                    <ReferenceLine y={0.5} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Needs Practice', fill: '#f59e0b', fontSize: 10 }} />
 
                     <Line
                         type="monotone"

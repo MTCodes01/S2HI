@@ -7,6 +7,7 @@ from rest_framework import serializers
 class StartSessionRequestSerializer(serializers.Serializer):
     """Request serializer for starting a new session."""
     age_group = serializers.CharField(max_length=20)
+    user_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class StartSessionResponseSerializer(serializers.Serializer):

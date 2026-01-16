@@ -560,7 +560,15 @@ const Dashboard: React.FC = () => {
                                     </span>
                                 </div>
                             </div>
-                            <ImprovementGraph data={historyData} />
+                            <ImprovementGraph
+                                data={historyData.map(item => ({
+                                    ...item,
+                                    // Invert risk to show proficiency/capability (1 - risk)
+                                    dyslexia_score: 1.0 - item.dyslexia_score,
+                                    dyscalculia_score: 1.0 - item.dyscalculia_score,
+                                    attention_score: 1.0 - item.attention_score
+                                }))}
+                            />
                         </div>
                     )}
                 </main>

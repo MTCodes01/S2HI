@@ -43,10 +43,21 @@ class StartSessionView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         age_group = serializer.validated_data['age_group']
+        user_id = serializer.validated_data.get('user_id')
         
         with transaction.atomic():
-            # Create new user
-            user = User.objects.create(age_group=age_group)
+            # Create or get user
+            if user_id:
+                try:
+                    user = User.objects.get(user_id=user_id)
+                    # Update age group if changed? Optional.
+                    user.age_group = age_group
+                    user.save()
+                except User.DoesNotExist:
+                    # Fallback to create if ID provided but not found
+                    user = User.objects.create(age_group=age_group)
+            else:
+                user = User.objects.create(age_group=age_group)
             
             # Generate session ID
             session_count = Session.objects.filter(user=user).count()
