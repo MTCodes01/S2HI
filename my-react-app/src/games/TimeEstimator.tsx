@@ -11,9 +11,10 @@ type TimeResult = {
 type Props = {
     targetSeconds: number;
     onAnswer: (result: TimeResult) => void;
+    ageGroup?: string;
 };
 
-export default function TimeEstimator({ targetSeconds, onAnswer }: Props) {
+export default function TimeEstimator({ targetSeconds, onAnswer, ageGroup = "9-11" }: Props) {
     const [isHolding, setIsHolding] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const startTime = useRef<number>(0);

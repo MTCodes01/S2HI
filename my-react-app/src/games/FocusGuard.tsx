@@ -10,9 +10,10 @@ type AttentionResult = {
 type Props = {
     stimulus: "green" | "red";
     onAnswer: (result: AttentionResult) => void;
+    ageGroup?: string;
 };
 
-export default function FocusGuard({ stimulus, onAnswer }: Props) {
+export default function FocusGuard({ stimulus, onAnswer, ageGroup = "9-11" }: Props) {
     const startTime = useRef<number>(Date.now());
     const [clicked, setClicked] = useState(false);
 
@@ -29,7 +30,7 @@ export default function FocusGuard({ stimulus, onAnswer }: Props) {
 
         const correct =
             (stimulus === "green") ||
-            (stimulus === "red" && false);
+            (stimulus === "red" && false); // Should never click red
 
         onAnswer({
             correct,
@@ -40,7 +41,14 @@ export default function FocusGuard({ stimulus, onAnswer }: Props) {
 
     // Auto-timeout logic
     useEffect(() => {
-        const timeoutDuration = 2000; // 2 seconds to decide
+        // Difficulty adjustment based on age
+        const getTimeoutDuration = () => {
+            if (ageGroup === '6-8') return 3000; // Slower for younger kids
+            if (ageGroup === '12-14') return 1500; // Faster for older kids
+            return 2000; // Default
+        };
+
+        const timeoutDuration = getTimeoutDuration();
 
         const timeout = setTimeout(() => {
             if (!clicked) {
@@ -64,7 +72,7 @@ export default function FocusGuard({ stimulus, onAnswer }: Props) {
         }, timeoutDuration);
 
         return () => clearTimeout(timeout);
-    }, [stimulus, clicked, onAnswer]);
+    }, [stimulus, clicked, onAnswer, ageGroup]);
 
     return (
         <div className="focus-guard-container">

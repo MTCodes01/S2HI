@@ -18,8 +18,9 @@ import WordChainBuilder from '../games/WordChainBuilder';
 import TimeEstimator from '../games/TimeEstimator';
 import TaskSwitchSprint from '../games/TaskSwitchSprint';
 import PlanAheadPuzzle from '../games/PlanAheadPuzzle';
+import ConfidenceSlider from '../games/ConfidenceSlider';
 
-type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'complete' | 'error';
+type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'confidence' | 'complete' | 'error';
 
 const Assessment: React.FC = () => {
     const navigate = useNavigate();
@@ -37,6 +38,7 @@ const Assessment: React.FC = () => {
     const [phase, setPhase] = useState<AssessmentPhase>('welcome');
     const [error, setError] = useState<string | null>(null);
     const [results, setResults] = useState<AssessmentResult | null>(null);
+    const [confidenceScore, setConfidenceScore] = useState<number>(50);
 
     // Timer ref
     const startTimeRef = useRef<number>(0);
@@ -108,10 +110,8 @@ const Assessment: React.FC = () => {
             });
 
             if (nextQuestion.end_session) {
-                // End session and get results
-                const sessionResults = await endSession(userId, sessionId);
-                setResults(sessionResults);
-                setPhase('complete');
+                // Go to confidence check before ending
+                setPhase('confidence');
             } else {
                 setCurrentQuestion(nextQuestion);
                 setQuestionNumber(prev => prev + 1);
@@ -134,6 +134,24 @@ const Assessment: React.FC = () => {
                 ageGroup
             }
         });
+    };
+
+    const handleConfidenceSubmit = async () => {
+        if (!userId || !sessionId) return;
+        setPhase('loading');
+        try {
+            const sessionResults = await endSession(userId, sessionId);
+            // Map score to type
+            let confLevel: "low" | "moderate" | "high" = "moderate";
+            if (confidenceScore < 35) confLevel = "low";
+            else if (confidenceScore > 75) confLevel = "high";
+
+            setResults({ ...sessionResults, confidence_level: confLevel });
+            setPhase('complete');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to finalize session');
+            setPhase('error');
+        }
     };
 
     // Restart assessment
@@ -217,6 +235,7 @@ const Assessment: React.FC = () => {
                     <FocusGuard
                         stimulus={Math.random() > 0.3 ? "green" : "red"}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else if (difficulty === 'medium') {
@@ -230,6 +249,7 @@ const Assessment: React.FC = () => {
                             { shape: 'square', color: 'blue' }
                         ]}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else {
@@ -239,6 +259,7 @@ const Assessment: React.FC = () => {
                         currentItem={Math.random() > 0.2 ? "A" : "C"}
                         isBreak={false}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             }
@@ -252,6 +273,7 @@ const Assessment: React.FC = () => {
                         left={Math.floor(Math.random() * 20)}
                         right={Math.floor(Math.random() * 20)}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else if (difficulty === 'medium') {
@@ -259,6 +281,7 @@ const Assessment: React.FC = () => {
                     <TimeEstimator
                         targetSeconds={5}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else {
@@ -268,6 +291,7 @@ const Assessment: React.FC = () => {
                         correctValue={5}
                         options={[4, 5, 6]}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             }
@@ -281,6 +305,7 @@ const Assessment: React.FC = () => {
                         question={question_text}
                         options={options}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else if (difficulty === 'medium') {
@@ -289,6 +314,7 @@ const Assessment: React.FC = () => {
                         targetWord="CAT"
                         scrambledLetters={['A', 'T', 'C', 'B']}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             } else {
@@ -296,6 +322,7 @@ const Assessment: React.FC = () => {
                     <ReadAloudEcho
                         sentence={question_text}
                         onAnswer={handleGameAnswer}
+                        ageGroup={ageGroup}
                     />
                 );
             }
@@ -307,6 +334,7 @@ const Assessment: React.FC = () => {
                 <PlanAheadPuzzle
                     level={1}
                     onAnswer={handleGameAnswer}
+                    ageGroup={ageGroup}
                 />
             );
         }
@@ -369,6 +397,33 @@ const Assessment: React.FC = () => {
         </div>
     );
 
+    const renderConfidence = () => (
+        <div className="confidence-screen-container smooth-fade-in">
+            <div className="active-card glass-panel" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+                <h2 className="text-2xl font-bold mb-6 gradient-text">How did you feel?</h2>
+                <p className="mb-8 text-gray-600">
+                    Use the slider to show how confident you felt during the games.
+                </p>
+
+                <div className="py-8">
+                    <ConfidenceSlider
+                        value={confidenceScore}
+                        onChange={setConfidenceScore}
+                    />
+                </div>
+
+                <button
+                    className="hero-start-btn mt-8"
+                    onClick={handleConfidenceSubmit}
+                    style={{ margin: '2rem auto' }}
+                >
+                    <span className="btn-text">Check My Results</span>
+                    <span className="btn-icon">➜</span>
+                </button>
+            </div>
+        </div>
+    );
+
     const renderComplete = () => (
         <div className="complete-container">
             <div className="complete-card">
@@ -419,6 +474,7 @@ const Assessment: React.FC = () => {
             {phase === 'welcome' && renderWelcome()}
             {phase === 'question' && renderQuestion()}
             {phase === 'loading' && renderLoading()}
+            {phase === 'confidence' && renderConfidence()}
             {phase === 'complete' && renderComplete()}
             {phase === 'error' && renderError()}
         </div>

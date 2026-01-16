@@ -19,24 +19,28 @@ type Props = {
     initialRule: Rule; // Use Rule type here
     items: Item[]; // Sequence of items to show
     onAnswer: (result: TaskResult) => void;
+    ageGroup?: string;
 };
 
-export default function TaskSwitchSprint({ initialRule, items, onAnswer }: Props) {
+export default function TaskSwitchSprint({ initialRule, items, onAnswer, ageGroup = "9-11" }: Props) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [currentRule, setCurrentRule] = useState<Rule>(initialRule);
     const [showFeedback, setShowFeedback] = useState<'correct' | 'wrong' | null>(null);
     const startTime = useRef<number>(Date.now());
     const [ruleChanged, setRuleChanged] = useState(false);
 
-    // switch rule every 3 items for demo
+    // switch rule logic
     useEffect(() => {
-        if (currentIndex > 0 && currentIndex % 3 === 0) {
+        // Easier for younger kids: Switch less often
+        const switchFrequency = ageGroup === '6-8' ? 5 : 3;
+
+        if (currentIndex > 0 && currentIndex % switchFrequency === 0) {
             setCurrentRule(prev => prev === 'COLOR' ? 'SHAPE' : 'COLOR');
             setRuleChanged(true);
             setTimeout(() => setRuleChanged(false), 1000);
         }
         startTime.current = Date.now();
-    }, [currentIndex]);
+    }, [currentIndex, ageGroup]);
 
     const handleResponse = (choice: 'left' | 'right') => {
         const item = items[currentIndex];

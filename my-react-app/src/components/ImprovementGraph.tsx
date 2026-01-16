@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-    BarChart,
-    Bar,
+    LineChart,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -128,29 +128,28 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
     return (
         <div style={{ width: '100%', height: 450 }}>
             <ResponsiveContainer>
-                <BarChart
-                    data={groupedData}
+                <LineChart
+                    data={sortedData} // Use sorted data directly, line charts handle time better
                     margin={{
                         top: 20,
-                        right: 10,
+                        right: 30, // More right margin for labels
                         left: 0,
                         bottom: 20,
                     }}
-                    barGap={2} // Tighter gap between bars of same session
-                    barCategoryGap="10%" // Standard gap, but spacers will add more visual separation
                 >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
 
                     <XAxis
-                        dataKey="uniqueId"
-                        tickFormatter={(index) => groupedData[index]?.tickLabel || ''}
+                        dataKey={(item) => item.datetime ? new Date(item.datetime).getTime() : new Date(item.date).getTime()}
+                        domain={['auto', 'auto']}
+                        tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        type="number" // Use time scale
+                        scale="time"
                         stroke="var(--text-muted)"
                         tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                         tickLine={false}
                         axisLine={false}
                         dy={10}
-                        interval={0} // Force show all ticks so our logic controls visibility via tickLabel
-                        minTickGap={0}
                     />
 
                     <YAxis
@@ -164,7 +163,7 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
 
                     <Tooltip
                         content={<CustomTooltip />}
-                        cursor={{ fill: 'rgba(0,0,0,0.03)' }} // Subtle highlight on hover
+                        cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 2 }}
                     />
 
                     <Legend
@@ -174,31 +173,41 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
                         wrapperStyle={{ paddingBottom: '20px' }}
                     />
 
-                    <ReferenceLine y={0.2} stroke="rgba(16, 185, 129, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Low Risk', fill: '#10b981', fontSize: 10 }} />
-                    <ReferenceLine y={0.6} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Moderate', fill: '#f59e0b', fontSize: 10 }} />
+                    {/* Risk Threshold Lines */}
+                    <ReferenceLine y={0.8} stroke="rgba(16, 185, 129, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Excellent', fill: '#10b981', fontSize: 10 }} />
+                    <ReferenceLine y={0.5} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Needs Work', fill: '#f59e0b', fontSize: 10 }} />
 
-                    <Bar
+                    <Line
+                        type="monotone"
                         dataKey="dyslexia_score"
-                        name="Reading Risk"
-                        fill="#3b82f6"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
+                        name="Reading"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
                     />
-                    <Bar
+                    <Line
+                        type="monotone"
                         dataKey="dyscalculia_score"
-                        name="Math Risk"
-                        fill="#10b981"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
+                        name="Math"
+                        stroke="#10b981"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
                     />
-                    <Bar
+                    <Line
+                        type="monotone"
                         dataKey="attention_score"
-                        name="Focus Risk"
-                        fill="#8b5cf6"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
+                        name="Focus"
+                        stroke="#8b5cf6"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
                     />
-                </BarChart>
+                </LineChart>
             </ResponsiveContainer>
         </div>
     );

@@ -10,9 +10,10 @@ type ReadingEchoResult = {
 type Props = {
     sentence: string;
     onAnswer: (result: ReadingEchoResult) => void;
+    ageGroup?: string;
 };
 
-export default function ReadAloudEcho({ sentence, onAnswer }: Props) {
+export default function ReadAloudEcho({ sentence, onAnswer, ageGroup = "9-11" }: Props) {
     const [input, setInput] = useState("");
     const startTime = useRef<number>(Date.now());
 

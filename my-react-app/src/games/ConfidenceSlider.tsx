@@ -1,13 +1,12 @@
-import { useState } from 'react';
+// import { useState } from 'react';
 import '../styles/ConfidenceSlider.css';
 
 type Props = {
-    onConfirm: (confidence: number) => void;
+    value: number;
+    onChange: (val: number) => void;
 };
 
-export default function ConfidenceSlider({ onConfirm }: Props) {
-    const [value, setValue] = useState(50);
-
+export default function ConfidenceSlider({ value, onChange }: Props) {
     const getEmoji = (val: number) => {
         if (val < 30) return '😕';
         if (val < 70) return '😐';
@@ -22,8 +21,6 @@ export default function ConfidenceSlider({ onConfirm }: Props) {
 
     return (
         <div className="confidence-container">
-            <h3>How do you feel you did?</h3>
-
             <div className="emoji-display">
                 {getEmoji(value)}
             </div>
@@ -35,16 +32,9 @@ export default function ConfidenceSlider({ onConfirm }: Props) {
                 min="0"
                 max="100"
                 value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
+                onChange={(e) => onChange(Number(e.target.value))}
                 className="slider"
             />
-
-            <button
-                className="confirm-btn"
-                onClick={() => onConfirm(value)}
-            >
-                Confirm
-            </button>
         </div>
     );
 }

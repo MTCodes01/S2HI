@@ -12,13 +12,15 @@ type Props = {
     correctValue: number;    // e.g. 5
     options: number[];       // e.g. [4,5,6]
     onAnswer: (result: VisualMathResult) => void;
+    ageGroup?: string;
 };
 
 export default function VisualMathMatch({
     equation,
     correctValue,
     options,
-    onAnswer
+    onAnswer,
+    ageGroup = "9-11"
 }: Props) {
     const startTime = useRef<number>(Date.now());
 

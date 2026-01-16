@@ -11,9 +11,10 @@ type PuzzleResult = {
 type Props = {
     level: 1 | 2 | 3; // Difficulty
     onAnswer: (result: PuzzleResult) => void;
+    ageGroup?: string;
 };
 
-export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
+export default function PlanAheadPuzzle({ level, onAnswer, ageGroup = "9-11" }: Props) {
     // Simplified: Use a 3-cup logic puzzle (move ball from A to C)
     // For demo purposes, this is a simplified grid path puzzle
     // "Get the ball to the star in minimum moves"
@@ -73,8 +74,8 @@ export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
                     <div
                         key={index}
                         className={`grid-cell ${cell === 1 ? 'ball' :
-                                cell === 2 ? 'wall' :
-                                    cell === 3 ? 'goal' : ''
+                            cell === 2 ? 'wall' :
+                                cell === 3 ? 'goal' : ''
                             }`}
                     >
                         {cell === 1 && '⚽'}
