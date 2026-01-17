@@ -8,16 +8,13 @@ import '../styles/assessment.css';
 
 // Game Imports
 import FocusGuard from '../games/FocusGuard';
-import PatternWatcher from '../games/PatternWatcher';
 import LetterFlipFrenzy from '../games/LetterFlipFrenzy';
-import ReadAloudEcho from '../games/ReadAloudEcho';
 import NumberSenseDash from '../games/NumberSenseDash';
 import VisualMathMatch from '../games/VisualMathMatch';
 
 // New Games
 import WordChainBuilder from '../games/WordChainBuilder';
 import TimeEstimator from '../games/TimeEstimator';
-import TaskSwitchSprint from '../games/TaskSwitchSprint';
 import PlanAheadPuzzle from '../games/PlanAheadPuzzle';
 import ConfidenceSlider from '../games/ConfidenceSlider';
 
@@ -269,46 +266,15 @@ const Assessment: React.FC = () => {
         // Use backend game_data if available, otherwise fall back to defaults
 
         // --- ATTENTION GAMES ---
+        // All attention difficulties now use FocusGuard
         if (domain === 'attention') {
-            if (difficulty === 'easy') {
-                return (
-                    <FocusGuard
-                        stimulus={game_data?.stimulus || (Math.random() > 0.3 ? "green" : "red")}
-                        onAnswer={handleGameAnswer}
-                        ageGroup={ageGroup}
-                    />
-                );
-            } else if (difficulty === 'medium') {
-                // Use backend items if available, else generate 10 random items
-                let items = game_data?.items;
-                if (!items || items.length === 0) {
-                    items = [];
-                    for (let i = 0; i < 10; i++) {
-                        items.push({
-                            shape: Math.random() > 0.5 ? 'circle' : 'square',
-                            color: Math.random() > 0.5 ? 'blue' : 'orange'
-                        });
-                    }
-                }
-
-                const initialRule = game_data?.initialRule || 'COLOR';
-
-                return (
-                    <TaskSwitchSprint
-                        initialRule={initialRule as 'COLOR' | 'SHAPE'}
-                        items={items}
-                        onAnswer={handleGameAnswer}
-                        ageGroup={ageGroup}
-                    />
-                );
-            } else {
-                return (
-                    <PatternWatcher
-                        onAnswer={handleGameAnswer}
-                        ageGroup={ageGroup}
-                    />
-                );
-            }
+            return (
+                <FocusGuard
+                    stimulus={game_data?.stimulus || (Math.random() > 0.3 ? "green" : "red")}
+                    onAnswer={handleGameAnswer}
+                    ageGroup={ageGroup}
+                />
+            );
         }
 
         // --- MATH GAMES ---
@@ -355,23 +321,14 @@ const Assessment: React.FC = () => {
                         ageGroup={ageGroup}
                     />
                 );
-            } else if (difficulty === 'medium') {
-                // Use backend-generated scrambled letters
+            } else {
+                // Medium and hard both use WordChainBuilder
                 const target = game_data?.targetWord || currentQuestion.correct_option || "READ";
                 const shuffled = game_data?.scrambledLetters || target.toUpperCase().split('').sort(() => Math.random() - 0.5);
                 return (
                     <WordChainBuilder
                         targetWord={target}
                         scrambledLetters={shuffled}
-                        onAnswer={handleGameAnswer}
-                        ageGroup={ageGroup}
-                    />
-                );
-            } else {
-                return (
-                    <ReadAloudEcho
-                        sentence={question_text}
-                        correctAnswer={currentQuestion.correct_option}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />

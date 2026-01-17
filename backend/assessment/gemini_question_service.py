@@ -15,15 +15,15 @@ client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 
 # Game type mapping for each domain/difficulty
 GAME_TYPE_MAP = {
-    'reading': {'easy': 'LetterFlipFrenzy', 'medium': 'WordChainBuilder', 'hard': 'ReadAloudEcho'},
+    'reading': {'easy': 'LetterFlipFrenzy', 'medium': 'WordChainBuilder', 'hard': 'WordChainBuilder'},
     'math': {'easy': 'NumberSenseDash', 'medium': 'TimeEstimator', 'hard': 'VisualMathMatch'},
-    'attention': {'easy': 'FocusGuard', 'medium': 'TaskSwitchSprint', 'hard': 'PatternWatcher'},
+    'attention': {'easy': 'FocusGuard', 'medium': 'FocusGuard', 'hard': 'FocusGuard'},  # Only FocusGuard
     'writing': {'easy': 'PlanAheadPuzzle', 'medium': 'PlanAheadPuzzle', 'hard': 'PlanAheadPuzzle'}
 }
 
 
-def determine_next_parameters(last_correct, response_time_ms, current_difficulty, domain_counts, session_accuracy, age_group='9-11'):
-    """Determine next question parameters using ACMC logic with age-appropriate bounds"""
+def determine_next_parameters(last_correct, response_time_ms, current_difficulty, domain_counts, difficulty_counts, session_accuracy, age_group='9-11'):
+    """Determine next question parameters using ACMC logic with age-appropriate bounds and minimum difficulty representation"""
     difficulty_levels = ['easy', 'medium', 'hard']
     current_idx = difficulty_levels.index(current_difficulty)
     
@@ -47,6 +47,29 @@ def determine_next_parameters(last_correct, response_time_ms, current_difficulty
         next_difficulty_idx = max(0, next_difficulty_idx)  # Min easy, but rare
     
     next_difficulty = difficulty_levels[next_difficulty_idx]
+    
+    # NEW: Force minimum representation of each difficulty level
+    total_questions = sum(difficulty_counts.values())
+    
+    # After 10 questions, ensure balanced distribution
+    if total_questions >= 10:
+        min_count = min(difficulty_counts.values())
+        max_count = max(difficulty_counts.values())
+        
+        # If the selected difficulty is over-represented (more than 3 ahead of min)
+        if difficulty_counts[next_difficulty] >= min_count + 3:
+            # Find underrepresented difficulties
+            underrep = [d for d in difficulty_levels if difficulty_counts[d] == min_count]
+            
+            # Respect age restrictions when forcing representation
+            if age_group == '6-8':
+                # Remove 'hard' from underrepresented list if present
+                underrep = [d for d in underrep if d != 'hard']
+            
+            if underrep:
+                import random
+                next_difficulty = random.choice(underrep)
+                print(f"🎯 Forcing underrepresented difficulty: {next_difficulty} (counts: {difficulty_counts})")
     
     # Domain rotation - Strictly pick least used
     domains = ['reading', 'math', 'attention', 'writing']
@@ -87,38 +110,109 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
     instructions = {
         'WordChainBuilder': f"Generate a {params['word_len']} letter word appropriate for age {age_group}. CRITICAL: scrambledLetters must contain EVERY letter from targetWord (if a letter appears twice in the word, it must appear twice in the array). Return JSON: {{ 'targetWord': 'WORD', 'scrambledLetters': ['W', 'O', 'R', 'D'] }} where scrambledLetters is the exact letters of targetWord in random order.",
         'TimeEstimator': f"Set targetSeconds based on difficulty: Easy={params['time_range'].split('-')[0]}, Medium={int(params['time_range'].split('-')[0]) + 2}, Hard={params['time_range'].split('-')[1]}.",
-        'TaskSwitchSprint': "Generate 8-10 items. Each item: { 'shape': 'circle'|'square', 'color': 'blue'|'orange' }. Also set initialRule: 'COLOR'|'SHAPE'.",
         'NumberSenseDash': f"Generate two numbers 'left' and 'right' for comparison. Use range {params['num_range']} for this age group.",
-        'VisualMathMatch': f"Create a math equation appropriate for age {age_group} (e.g. '15 + 7' or '3 x 4') and a list of 4 numeric 'options' with the 'correctValue'. Use numbers in range {params['num_range']}.",
-        'PatternWatcher': "No extra data needed, game generates sequence internally. Just provide age-appropriate encouragement in question_text.",
+        'VisualMathMatch': f"""Create a SIMPLE arithmetic equation appropriate for age {age_group}.
+
+CRITICAL: Keep it basic arithmetic - NO calculus, NO limits, NO advanced algebra!
+
+Age-specific equation types:
+- 6-8 years: Single-digit addition/subtraction
+  Examples: "5 + 3", "9 - 4", "7 + 2"
+  Range: Use numbers {params['num_range']}
+  
+- 9-11 years: Two-digit addition/subtraction, simple multiplication
+  Examples: "12 + 8", "15 - 7", "6 × 4"
+  Range: Use numbers {params['num_range']}
+  
+- 12-14 years: Multiplication, division, two-step operations
+  Examples: "8 × 5", "24 ÷ 3", "10 + 5 × 2"
+  Range: Use numbers {params['num_range']}
+  
+- 14+ years: Multi-step arithmetic, simple expressions
+  Examples: "15 × 3 - 10", "48 ÷ 6 + 7", "(20 - 5) × 2"
+  Range: Use numbers {params['num_range']}
+
+RULES:
+✓ Use only: + - × ÷ and parentheses
+✓ Whole number results only (no decimals)
+✓ Keep equations short (max 3 operations)
+✓ Age-appropriate difficulty
+
+AVOID:
+✗ Calculus (limits, derivatives, integrals)
+✗ Algebra variables (x, y, solve for...)
+✗ Exponents beyond simple squares
+✗ Complex fractions
+✗ Trigonometry
+
+Format:
+- equation: the arithmetic expression (e.g., "15 + 7")
+- correctValue: the answer as a number
+- options: array of 4 numbers including the correct answer""",
         'FocusGuard': "Set stimulus to 'green' or 'red'.",
         'PlanAheadPuzzle': f"This is a GRID-BASED pathfinding puzzle game. Set level 1-3 based on difficulty and gridSize: 3 for age 6-8, 4 for 9-11, 5 for 12-14, 6 for 14+. The question_text should be simple like 'Reach the Star!' or 'Navigate to the goal!'. This is NOT an essay or written planning task - it's a visual puzzle where users move a ball through a grid.",
         'LetterFlipFrenzy': f"""Generate a reading comprehension question with exactly 4 word options appropriate for age {age_group}.
         
 CRITICAL INSTRUCTION - FOLLOW THIS PROCESS EXACTLY:
-1. FIRST: Generate 4 age-appropriate words (use {params['word_len']} letter words)
-2. SECOND: Analyze these words for common properties (letters, positions, patterns)
-3. THIRD: Create a question that AT LEAST ONE word can correctly answer
-4. FOURTH: Set correct_option to the word that answers the question
+1. FIRST: Generate 4 age-appropriate words with VARIED characteristics (use {params['word_len']} letter words)
+2. SECOND: Analyze these words to find a UNIQUE property that ONLY ONE word has
+3. THIRD: Create a question about that unique property
+4. FOURTH: Set correct_option to the ONLY word that answers the question
 
-Valid question patterns (choose ONE that matches your words):
-- "Which word contains the letter 'X' as the second/third/fourth letter?" (verify one word has letter X at that position)
-- "Which word starts with the letter 'X'?" (verify one word starts with X)
-- "Which word ends with the letter 'X'?" (verify one word ends with X)
-- "Which word has exactly N letters?" (verify one word has N letters)
-- "Which word contains the letter 'X'?" (verify one word contains X anywhere)
+CRITICAL: ONLY ONE WORD must correctly answer the question. If multiple words match, the question is INVALID.
+
+Valid question patterns (choose ONE where ONLY ONE word matches):
+- "Which word contains the letter 'X' as the second/third/fourth letter?" (ONLY one word has X at that position)
+- "Which word starts with the letter 'X'?" (ONLY one word starts with X)
+- "Which word ends with the letter 'X'?" (ONLY one word ends with X)
+- "Which word has exactly N letters?" (ONLY one word has N letters - ensure words have DIFFERENT lengths)
+- "Which word contains the letter 'X'?" (ONLY one word contains X)
 
 VALIDATION CHECKLIST before returning:
-✓ Did I generate exactly 4 words?
-✓ Is there at least one word that correctly answers my question?
-✓ Is correct_option set to a word that answers the question?
-✓ Are all words age-appropriate ({params['word_len']} letters for {age_group})?
+✓ Did I generate exactly 4 words with VARIED properties (different lengths, letters, patterns)?
+✓ Does ONLY ONE word correctly answer my question? (NOT 2, 3, or 4 words)
+✓ Is correct_option set to the ONLY word that answers the question?
+✓ Are all words age-appropriate?
 
-Example for age 6-8:
-Words: ["edge", "moon", "star", "lake"]
-Question: "Which word contains the letter 'd' as the second letter?"
-Correct: "edge" (e-d-g-e, second letter is 'd')""",
-        'ReadAloudEcho': "Generate a 10-15 word sentence appropriate for age."
+GOOD Example (ONLY ONE MATCH):
+Words: ["cat", "moon", "star", "river"]  (lengths: 3, 4, 4, 5)
+Question: "Which word has exactly 3 letters?"
+Correct: "cat" ✓ (only "cat" has 3 letters)
+
+BAD Example (MULTIPLE MATCHES):
+Words: ["plant", "ships", "train", "house"]  (all have 5 letters!)
+Question: "Which word has exactly 5 letters?"
+This is INVALID - all 4 words match! ✗
+
+If you find multiple words match your question, GENERATE NEW WORDS or CHANGE THE QUESTION.""",
+        'ReadAloudEcho': f"""Generate a simple, natural sentence for a read-aloud typing exercise.
+
+CRITICAL: Keep vocabulary and complexity appropriate for age {age_group}. Avoid academic jargon, complex terminology, or overly sophisticated language.
+
+Age-specific guidelines:
+- 6-8 years: Simple, everyday sentences about familiar topics (animals, family, school, play)
+  Example: "The cat jumped over the fence and ran to the tree."
+- 9-11 years: Clear sentences about everyday life, hobbies, or simple stories
+  Example: "My friend and I built a treehouse in the backyard last summer."
+- 12-14 years: Natural sentences about school, interests, or relatable experiences  
+  Example: "The science project was challenging but I learned a lot about plants."
+- 14+ years: Normal conversational sentences, avoid pretentious vocabulary
+  Example: "After finishing my homework, I went to the park with my friends."
+
+AVOID:
+✗ Academic language: "juxtaposition", "paradigm", "contemporary discourse"
+✗ Complex abstractions: "The multifaceted nature of..."
+✗ Business jargon: "synergy", "leverage", "optimization"
+✗ Overly formal tone: "One must consider the implications..."
+
+GOOD examples:
+✓ "The sunset painted the sky with beautiful orange and pink colors."
+✓ "I practice piano every day after school to improve my skills."
+✓ "The movie was so funny that everyone in the theater was laughing."
+
+Keep it natural, relatable, and readable! Target length: 10-15 words.
+
+NOTE: This is a typing game. The sentence should go in question_text. The options array can be empty or contain dummy values - it's not used by the game."""
     }
     
     instruction = instructions.get(game_type, "Generate appropriate question")
@@ -175,6 +269,11 @@ JSON Format:
     // Game-specific data for {game_type}
   }}
 }}
+
+NOTE: For ReadAloudEcho (typing game), set:
+- question_text: the sentence to type
+- options: [] (empty array, not used)
+- correct_option: the same sentence (or missing word for fill-in-blank)
 
 Generate JSON now:"""
 
@@ -321,17 +420,36 @@ def generate_fallback_question(domain, difficulty, game_type, age_group='9-11'):
             }
     
     elif domain == 'attention':
-        stimulus = random.choice(colors)
-        action = 'GO' if stimulus == 'green' else 'STOP'
-        return {
-            'question_text': f'Press GO for green, STOP for other colors',
-            'options': ['GO', 'STOP'],
-            'correct_option': action,
-            'game_data': {'stimulus': stimulus},
-            'domain': domain,
-            'difficulty': difficulty,
-            'game_type': game_type
-        }
+        if game_type == 'ReadAloudEcho':
+            # Typing game - user types the sentence
+            sentences = [
+                f"The {'small dog' if age_group == '6-8' else 'student'} {'played' if age_group == '6-8' else 'worked'} hard today.",
+                "Reading helps us learn new things every day.",
+                "Practice makes perfect when you keep trying.",
+            ]
+            sentence = random.choice(sentences)
+            
+            return {
+                'question_text': sentence,
+                'options': [],  # Not used in typing game
+                'correct_option': sentence,  # The sentence itself is the correct answer
+                'game_data': {},
+                'domain': domain,
+                'difficulty': difficulty,
+                'game_type': 'ReadAloudEcho'
+            }
+        else:
+            stimulus = random.choice(colors)
+            action = 'GO' if stimulus == 'green' else 'STOP'
+            return {
+                'question_text': f'Press GO for green, STOP for other colors',
+                'options': ['GO', 'STOP'],
+                'correct_option': action,
+                'game_data': {'stimulus': stimulus},
+                'domain': domain,
+                'difficulty': difficulty,
+                'game_type': game_type
+            }
     
     elif domain == 'writing' or domain == 'logic':
         levels = {'easy': 1, 'medium': 2, 'hard': 3}
@@ -368,7 +486,7 @@ def generate_fallback_question(domain, difficulty, game_type, age_group='9-11'):
     }
 
 
-def generate_adaptive_question(age_group, last_correct=None, response_time_ms=None, current_domain='reading', current_difficulty='easy', domain_counts=None, session_accuracy=1.0, last_question_text=None, next_domain=None, next_difficulty=None):
+def generate_adaptive_question(age_group, last_correct=None, response_time_ms=None, current_domain='reading', current_difficulty='easy', domain_counts=None, difficulty_counts=None, session_accuracy=1.0, last_question_text=None, next_domain=None, next_difficulty=None):
     """Main entry point for adaptive question generation"""
     if next_domain and next_difficulty:
         domain, difficulty = next_domain, next_difficulty
@@ -377,9 +495,10 @@ def generate_adaptive_question(age_group, last_correct=None, response_time_ms=No
     else:
         domain, difficulty = determine_next_parameters(
             last_correct, response_time_ms or 1000, current_difficulty,
-            domain_counts or {}, session_accuracy, age_group
+            domain_counts or {}, difficulty_counts or {}, session_accuracy, age_group
         )
     
     game_type = GAME_TYPE_MAP.get(domain, {}).get(difficulty, 'LetterFlipFrenzy')
     
     return generate_gemini_question(domain, difficulty, age_group, game_type, last_correct, response_time_ms, session_accuracy, last_question_text)
+

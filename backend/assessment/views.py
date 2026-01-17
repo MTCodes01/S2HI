@@ -150,6 +150,13 @@ class GetNextQuestionView(APIView):
                 'writing': responses.filter(domain='writing').count()
             }
             
+            # Count questions per difficulty - NEW for minimum representation
+            difficulty_counts = {
+                'easy': responses.filter(difficulty='easy').count(),
+                'medium': responses.filter(difficulty='medium').count(),
+                'hard': responses.filter(difficulty='hard').count()
+            }
+            
             # Get current difficulty from last response
             if responses.exists():
                 last_response = responses.first()
@@ -164,13 +171,14 @@ class GetNextQuestionView(APIView):
                 correct if correct is not None else True, 
                 response_time_ms or 1000, 
                 current_difficulty,
-                domain_counts, 
+                domain_counts,
+                difficulty_counts,  # NEW: Pass difficulty counts
                 session_accuracy, 
                 user.age_group
             )
             
             # Check if session should end (30 questions max)
-            if total_responses >= 30:
+            if total_responses >= 10:
                 return Response(
                     {
                         'message': 'Assessment complete! Generating your results...',
@@ -192,6 +200,7 @@ class GetNextQuestionView(APIView):
                 current_domain=current_domain,
                 current_difficulty=current_difficulty,
                 domain_counts=domain_counts,
+                difficulty_counts=difficulty_counts,  # NEW: Pass difficulty counts
                 session_accuracy=session_accuracy,
                 last_question_text=last_question_text,
                 next_domain=next_domain,
@@ -207,7 +216,7 @@ class GetNextQuestionView(APIView):
                 'difficulty': question_data['difficulty'],
                 'question_text': question_data['question_text'],
                 'options': question_data['options'],
-                'correct_option': question_data.get('correct_option', question_data['options'][0]),
+                'correct_option': question_data.get('correct_option', question_data['options'][0] if question_data.get('options') else ''),
                 'game_type': question_data.get('game_type'),
                 'game_data': question_data.get('game_data')
             }

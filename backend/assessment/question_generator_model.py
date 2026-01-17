@@ -24,7 +24,7 @@ class QuestionGeneratorModel:
             'reading': {
                 'easy': 'LetterFlipFrenzy',
                 'medium': 'WordChainBuilder',
-                'hard': 'ReadAloudEcho'
+                'hard': 'WordChainBuilder'
             },
             'math': {
                 'easy': 'NumberSenseDash',
@@ -33,8 +33,8 @@ class QuestionGeneratorModel:
             },
             'attention': {
                 'easy': 'FocusGuard',
-                'medium': 'TaskSwitchSprint',
-                'hard': 'PatternWatcher'
+                'medium': 'FocusGuard',
+                'hard': 'FocusGuard'
             },
             'writing': {
                 'easy': 'PlanAheadPuzzle',
@@ -285,24 +285,7 @@ class QuestionGeneratorModel:
                 'targetSeconds': target_seconds
             }
         
-        elif game_type == 'TaskSwitchSprint':
-            # Generate sequence of shapes and colors
-            shapes = ['circle', 'square']
-            colors = ['blue', 'orange']
-            num_items = 4 if difficulty == 'easy' else 6 if difficulty == 'medium' else 8
-            
-            items = []
-            for _ in range(num_items):
-                items.append({
-                    'shape': random.choice(shapes),
-                    'color': random.choice(colors)
-                })
-            
-            game_data = {
-                'initialRule': random.choice(['COLOR', 'SHAPE']),
-                'items': items
-            }
-        
+
         elif game_type == 'PlanAheadPuzzle':
             # Puzzle level based on difficulty
             level = 1 if difficulty == 'easy' else 2 if difficulty == 'medium' else 3
@@ -338,22 +321,8 @@ class QuestionGeneratorModel:
                 'options': [int(o) if o.isdigit() else 0 for o in options] if options else [correct_value]
             }
         
-        elif game_type == 'PatternWatcher':
-            # Pattern recognition
-            patterns = [['A', 'B', 'A', 'B'], ['1', '2', '1', '2'], ['X', 'Y', 'X', 'Y']]
-            pattern = random.choice(patterns)
-            game_data = {
-                'expectedPattern': pattern,
-                'currentItem': pattern[0] if random.random() > 0.2 else 'C',
-                'isBreak': random.random() < 0.3
-            }
-        
-        elif game_type == 'ReadAloudEcho':
-            # Reading aloud - use question_text as the sentence
-            game_data = {
-                'sentence': question_text
-            }
-        
+
+
         elif game_type == 'LetterFlipFrenzy':
             # Letter recognition with similar letters
             game_data = {

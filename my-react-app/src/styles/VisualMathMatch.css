@@ -125,6 +125,29 @@
     margin-left: 2px;
 }
 
+/* Proportional Bar for Large Numbers */
+.visual-bar-container {
+    width: 100%;
+    height: 30px;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.visual-bar {
+    height: 100%;
+    background: linear-gradient(135deg, #8b5cf6 0%, #f472b6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 0.875rem;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 40px;
+}
+
 /* Ripple Effect */
 .visual-math-option::before {
     content: '';

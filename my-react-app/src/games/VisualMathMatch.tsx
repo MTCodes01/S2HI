@@ -41,25 +41,23 @@ export default function VisualMathMatch({
     return (
         <div className="visual-math-container">
             <h2 className="visual-math-heading">
-                Match the equation to the blocks
+                Solve the equation
             </h2>
 
             <div className="visual-math-equation">{equation}</div>
 
             <div className="visual-math-options">
-                {options.map((value) => (
-                    <button
-                        key={value}
-                        onClick={() => handleClick(value)}
-                        className="visual-math-option"
-                    >
-                        <div className="visual-math-number">{value}</div>
-                        <div className="visual-math-block">
-                            {"●".repeat(Math.min(value, 20))}
-                            {value > 20 && <span className="more-dots">...</span>}
-                        </div>
-                    </button>
-                ))}
+                {options.map((value) => {
+                    return (
+                        <button
+                            key={value}
+                            onClick={() => handleClick(value)}
+                            className="visual-math-option"
+                        >
+                            <div className="visual-math-number">{value}</div>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
