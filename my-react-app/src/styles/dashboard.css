@@ -569,24 +569,46 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
+  /* Use conic-gradient for dynamic progress */
+  background: conic-gradient(
+    var(--circle-color) calc(var(--accuracy) * 1%),
+    var(--circle-bg) 0
+  );
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
 }
 
-.accuracy-circle::before {
+/* Inner circle to create the ring effect */
+.accuracy-circle::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 8px; /* Control thickness of the ring */
+  background: white;
   border-radius: 50%;
-  border: 6px solid rgba(0, 0, 0, 0.08);
+  z-index: 1;
 }
 
-.accuracy-circle.reading { background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%); }
-.accuracy-circle.reading::before { border-color: var(--coral-light); border-left-color: var(--coral); }
+/* Ensure text is above the inner circle */
+.accuracy-value, .accuracy-label {
+  position: relative;
+  z-index: 2;
+}
 
-.accuracy-circle.math { background: linear-gradient(135deg, #f0fff4 0%, #dcffe4 100%); }
-.accuracy-circle.math::before { border-color: var(--green-light); border-left-color: var(--green); }
+.accuracy-circle.reading { 
+  --circle-color: var(--coral);
+  --circle-bg: var(--coral-light);
+}
 
-.accuracy-circle.focus { background: linear-gradient(135deg, #fffbeb 0%, #fff3c4 100%); }
-.accuracy-circle.focus::before { border-color: var(--yellow-light); border-left-color: var(--yellow); }
+.accuracy-circle.math { 
+  --circle-color: var(--green);
+  --circle-bg: var(--green-light);
+}
+
+.accuracy-circle.focus { 
+  --circle-color: var(--yellow);
+  --circle-bg: var(--yellow-light);
+}
+
+/* Removed legacy ::before border logic */
 
 .accuracy-value {
   font-size: 1.5rem;
