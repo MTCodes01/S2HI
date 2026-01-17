@@ -10,11 +10,12 @@ type PuzzleResult = {
 
 type Props = {
     level: 1 | 2 | 3;
+    gridSize?: number;  // Age-appropriate grid size
     onAnswer: (result: PuzzleResult) => void;
     ageGroup?: string;
 };
 
-export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
+export default function PlanAheadPuzzle({ level, gridSize, onAnswer }: Props) {
     const [grid, setGrid] = useState<number[]>([]);
     const [ballPos, setBallPos] = useState(-1);
     const [goalPos, setGoalPos] = useState(-1);
@@ -50,7 +51,8 @@ export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
     };
 
     const generateLevelData = useCallback(() => {
-        const gWidth = level === 1 ? 4 : level === 2 ? 5 : 6;
+        // Use gridSize if provided, otherwise fallback to level-based sizing
+        const gWidth = gridSize || (level === 1 ? 4 : level === 2 ? 5 : 6);
         const size = gWidth * gWidth;
         let newGrid: number[] = [];
         let start = -1;
@@ -89,7 +91,7 @@ export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
         setMoves(0);
         setStartTime(Date.now());
         setIsGenerating(false);
-    }, [level]);
+    }, [level, gridSize]);
 
     useEffect(() => {
         setIsGenerating(true);
@@ -117,10 +119,14 @@ export default function PlanAheadPuzzle({ level, onAnswer }: Props) {
 
             if (reachedGoal) {
                 const responseTime = Date.now() - startTime;
+                const actualMoves = moves + 1;
+                // Consider it correct if within 2x the optimal moves
+                const isEfficient = actualMoves <= targetMoves * 2;
+                
                 setTimeout(() => {
                     onAnswer({
-                        correct: true,
-                        moves: moves + 1,
+                        correct: isEfficient,
+                        moves: actualMoves,
                         optimalMoves: targetMoves,
                         responseTime
                     });

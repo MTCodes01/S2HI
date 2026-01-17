@@ -384,6 +384,7 @@ const Assessment: React.FC = () => {
             return (
                 <PlanAheadPuzzle
                     level={game_data?.level || 1}
+                    gridSize={game_data?.gridSize}
                     onAnswer={handleGameAnswer}
                     ageGroup={ageGroup}
                 />

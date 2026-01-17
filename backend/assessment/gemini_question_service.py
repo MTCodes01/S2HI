@@ -36,13 +36,13 @@ def determine_next_parameters(last_correct, response_time_ms, current_difficulty
         next_difficulty_idx = current_idx
     
     # Age-appropriate difficulty bounds
-    if age_group in ['6-8', '6-9']:
+    if age_group == '6-8':
         # Young kids: limit to easy and medium only
         next_difficulty_idx = min(1, next_difficulty_idx)  # Max medium
-    elif age_group in ['9-11']:
+    elif age_group == '9-11':
         # Middle age: can handle all levels but prefer medium
         pass  # No restrictions
-    elif age_group in ['11-14', '12-14', '14+']:
+    elif age_group in ['12-14', '14+']:
         # Older kids and teens: avoid too easy questions, prefer medium-hard
         next_difficulty_idx = max(0, next_difficulty_idx)  # Min easy, but rare
     
@@ -75,16 +75,24 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
     if last_question_text:
         context += f". PREVIOUS QUESTION WAS: '{last_question_text}'. DO NOT REPEAT THIS CONTENT."
     
-    # Game-specific instructions
+    # Game-specific instructions with age-appropriate scaling
+    age_params = {
+        '6-8': {'num_range': '1-10', 'time_range': '2-4', 'word_len': '3-4'},
+        '9-11': {'num_range': '10-50', 'time_range': '3-6', 'word_len': '4-6'},
+        '12-14': {'num_range': '20-100', 'time_range': '4-8', 'word_len': '5-7'},
+        '14+': {'num_range': '50-200', 'time_range': '5-10', 'word_len': '6-9'}
+    }
+    params = age_params.get(age_group, age_params['9-11'])
+    
     instructions = {
-        'WordChainBuilder': "Generate a 4-6 letter word. Return JSON: { 'targetWord': 'WORD', 'scrambledLetters': ['W', 'R', 'O', 'D'] }",
-        'TimeEstimator': "Set targetSeconds: Easy=3-5, Medium=5-7, Hard=7-10.",
+        'WordChainBuilder': f"Generate a {params['word_len']} letter word appropriate for age {age_group}. CRITICAL: scrambledLetters must contain EVERY letter from targetWord (if a letter appears twice in the word, it must appear twice in the array). Return JSON: {{ 'targetWord': 'WORD', 'scrambledLetters': ['W', 'O', 'R', 'D'] }} where scrambledLetters is the exact letters of targetWord in random order.",
+        'TimeEstimator': f"Set targetSeconds based on difficulty: Easy={params['time_range'].split('-')[0]}, Medium={int(params['time_range'].split('-')[0]) + 2}, Hard={params['time_range'].split('-')[1]}.",
         'TaskSwitchSprint': "Generate 8-10 items. Each item: { 'shape': 'circle'|'square', 'color': 'blue'|'orange' }. Also set initialRule: 'COLOR'|'SHAPE'.",
-        'NumberSenseDash': "Generate two numbers 'left' and 'right' for magnitude comparison. Age 6-8: 1-20, Age 9-11: 10-50, Age 12-14: 20-100.",
-        'VisualMathMatch': "Create a math equation (e.g. '15 + 7' or '3 x 4') and a list of 4 numeric 'options' with the 'correctValue'.",
+        'NumberSenseDash': f"Generate two numbers 'left' and 'right' for comparison. Use range {params['num_range']} for this age group.",
+        'VisualMathMatch': f"Create a math equation appropriate for age {age_group} (e.g. '15 + 7' or '3 x 4') and a list of 4 numeric 'options' with the 'correctValue'. Use numbers in range {params['num_range']}.",
         'PatternWatcher': "No extra data needed, game generates sequence internally. Just provide age-appropriate encouragement in question_text.",
         'FocusGuard': "Set stimulus to 'green' or 'red'.",
-        'PlanAheadPuzzle': "Set level 1-3 based on difficulty.",
+        'PlanAheadPuzzle': f"This is a GRID-BASED pathfinding puzzle game. Set level 1-3 based on difficulty and gridSize: 3 for age 6-8, 4 for 9-11, 5 for 12-14, 6 for 14+. The question_text should be simple like 'Reach the Star!' or 'Navigate to the goal!'. This is NOT an essay or written planning task - it's a visual puzzle where users move a ball through a grid.",
         'LetterFlipFrenzy': "Generate a question about similar looking letters (b/d/p/q).",
         'ReadAloudEcho': "Generate a 10-15 word sentence appropriate for age."
     }
@@ -98,20 +106,10 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
             'medium': 'Simple tasks, numbers up to 20, basic 4-letter words',
             'hard': 'Not used for this age'
         },
-        '6-9': {
-            'easy': 'Very simple, 1-2 step tasks, numbers 1-10, common 3-letter words',
-            'medium': 'Simple tasks, numbers up to 20, basic 4-letter words', 
-            'hard': 'Not used for this age'
-        },
         '9-11': {
             'easy': 'Straightforward, numbers up to 50, 4-5 letter words',
             'medium': 'Moderate challenge, numbers up to 100, 5-6 letter everyday words',
             'hard': 'Challenging, numbers over 100, 6-7 letter words, multi-step'
-        },
-        '11-14': {
-            'easy': 'Basic level, numbers up to 100, 5-6 letter words',
-            'medium': 'Grade-level challenge, larger numbers, 6-8 letter words',
-            'hard': 'Advanced level, complex numbers, 8+ letter words, multi-step reasoning'
         },
         '12-14': {
             'easy': 'Basic level, numbers up to 100, 5-6 letter words',
@@ -172,32 +170,73 @@ Generate JSON now:"""
     except json.JSONDecodeError as e:
         print(f"❌ Gemini returned invalid JSON: {e}")
         print(f"Response text: {response.text[:200] if 'response' in locals() else 'No response'}")
-        return generate_fallback_question(domain, difficulty, game_type)
+        return generate_fallback_question(domain, difficulty, game_type, age_group)
     except Exception as e:
         print(f"❌ Gemini API failed: {type(e).__name__}: {str(e)}")
-        return generate_fallback_question(domain, difficulty, game_type)
+        return generate_fallback_question(domain, difficulty, game_type, age_group)
 
 
-def generate_fallback_question(domain, difficulty, game_type):
+def generate_fallback_question(domain, difficulty, game_type, age_group='9-11'):
     """Generate varied fallback questions if Gemini fails"""
     import random
     
-    # More varied fallback questions
-    reading_words = ['CAT', 'DOG', 'SUN', 'MOON', 'TREE', 'BOOK', 'FISH', 'BIRD', 'STAR', 'BLUE']
-    math_pairs = [(5, 8), (12, 7), (15, 9), (20, 13), (6, 11), (14, 18), (25, 15), (33, 44)]
-    math_eqs = [('5 + 8', 13), ('12 - 4', 8), ('3 x 4', 12), ('15 + 10', 25), ('20 / 2', 10)]
+    # Age-appropriate word lists
+    words_by_age = {
+        '6-8': ['CAT', 'DOG', 'SUN', 'BED', 'HAT', 'CUP', 'BAT', 'PIG'],
+        '9-11': ['MOON', 'TREE', 'BOOK', 'FISH', 'BIRD', 'STAR', 'BLUE', 'RAIN'],
+        '12-14': ['PLANET', 'FOREST', 'GARDEN', 'RHYTHM', 'KNIGHT', 'ISLAND'],
+        '14+': ['SYMPHONY', 'ASTRONOMY', 'TECHNIQUE', 'ATMOSPHERE', 'ARCHITECT']
+    }
+    
+    # Age-appropriate number ranges
+    num_ranges = {
+        '6-8': (1, 10),
+        '9-11': (10, 50),
+        '12-14': (20, 100),
+        '14+': (50, 200)
+    }
+    
+    # Age-appropriate time targets
+    time_ranges = {
+        '6-8': (2, 4),
+        '9-11': (3, 6),
+        '12-14': (4, 8),
+        '14+': (5, 10)
+    }
+    
+    reading_words = words_by_age.get(age_group, words_by_age['9-11'])
+    num_min, num_max = num_ranges.get(age_group, (10, 50))
+    time_min, time_max = time_ranges.get(age_group, (3, 6))
+    
+    # Generate random number pairs appropriate for age
+    math_pairs = [(random.randint(num_min, num_max), random.randint(num_min, num_max)) for _ in range(5)]
+    
+    # Generate age-appropriate math equations
+    if age_group == '6-8':
+        math_eqs = [(f'{a} + {b}', a+b) for a, b in [(random.randint(1, 5), random.randint(1, 5)) for _ in range(3)]]
+    elif age_group == '14+':
+        math_eqs = [
+            (f'{a} × {b}', a*b) for a, b in [(random.randint(10, 20), random.randint(2, 9)) for _ in range(2)]
+        ] + [(f'{a} + {b}', a+b) for a, b in [(random.randint(50, 100), random.randint(20, 80)) for _ in range(2)]]
+    else:
+        math_eqs = [
+            (f'{a} + {b}', a+b) for a, b in [(random.randint(5, 20), random.randint(5, 20)) for _ in range(2)]
+        ] + [(f'{a} × {b}', a*b) for a, b in [(random.randint(2, 10), random.randint(2, 5)) for _ in range(2)]]
+    
     colors = ['green', 'red', 'blue', 'yellow']
     
     if domain == 'reading':
         if game_type == 'WordChainBuilder':
             word = random.choice(reading_words)
+            # Ensure ALL letters from word are included
             letters = list(word)
-            random.shuffle(letters)
+            scrambled = letters.copy()
+            random.shuffle(scrambled)
             return {
                 'question_text': f'Unscramble these letters to make a word',
                 'options': [word, word[::-1], word[1:] + word[0], word[-1] + word[:-1]],
                 'correct_option': word,
-                'game_data': {'targetWord': word, 'scrambledLetters': letters},
+                'game_data': {'targetWord': word, 'scrambledLetters': scrambled},
                 'domain': domain,
                 'difficulty': difficulty,
                 'game_type': game_type
@@ -217,7 +256,7 @@ def generate_fallback_question(domain, difficulty, game_type):
     
     elif domain == 'math':
         if game_type == 'TimeEstimator':
-            target = random.randint(3, 8)
+            target = random.randint(time_min, time_max)
             return {
                 'question_text': f'Estimate {target} seconds!',
                 'options': ['Start', 'Stop'],
@@ -229,7 +268,7 @@ def generate_fallback_question(domain, difficulty, game_type):
             }
         elif game_type == 'VisualMathMatch' or difficulty == 'hard':
             eq, ans = random.choice(math_eqs)
-            opts = [str(ans), str(ans+2), str(abs(ans-3)), str(ans+5)]
+            opts = [str(ans), str(ans+random.randint(1,5)), str(abs(ans-random.randint(1,5))), str(ans+random.randint(6,10))]
             random.shuffle(opts)
             return {
                 'question_text': f'Solve: {eq}',
@@ -273,11 +312,21 @@ def generate_fallback_question(domain, difficulty, game_type):
     elif domain == 'writing' or domain == 'logic':
         levels = {'easy': 1, 'medium': 2, 'hard': 3}
         level = levels.get(difficulty, 1)
+        
+        # Age-based grid size
+        grid_sizes = {
+            '6-8': 3,
+            '9-11': 4,
+            '12-14': 5,
+            '14+': 6
+        }
+        grid_size = grid_sizes.get(age_group, 4)
+        
         return {
             'question_text': f'Plan ahead! Solve this Level {level} puzzle.',
             'options': ['Start', 'Reset'],
             'correct_option': 'Start',
-            'game_data': {'level': level},
+            'game_data': {'level': level, 'gridSize': grid_size},
             'domain': domain,
             'difficulty': difficulty,
             'game_type': 'PlanAheadPuzzle'

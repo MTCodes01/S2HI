@@ -418,32 +418,38 @@ const Dashboard: React.FC = () => {
                             <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No past assessments found.</p>
                         ) : (
                             <div className="history-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {historyData.map((session, index) => (
-                                    <div key={index} className="history-item" style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        padding: '1rem',
-                                        background: 'rgba(255,255,255,0.5)',
-                                        border: '1px solid var(--glass-border)',
-                                        borderRadius: '12px'
-                                    }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <span style={{ fontWeight: 600, fontSize: '1rem' }}>
-                                                {session.datetime ? new Date(session.datetime).toLocaleDateString() : session.date}
-                                            </span>
-                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                                {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
-                                            </span>
+                                {[...historyData]
+                                    .sort((a, b) => {
+                                        const dateA = a.datetime ? new Date(a.datetime).getTime() : 0;
+                                        const dateB = b.datetime ? new Date(b.datetime).getTime() : 0;
+                                        return dateB - dateA;
+                                    })
+                                    .map((session, index) => (
+                                        <div key={index} className="history-item" style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: '1rem',
+                                            background: 'rgba(255,255,255,0.5)',
+                                            border: '1px solid var(--glass-border)',
+                                            borderRadius: '12px'
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <span style={{ fontWeight: 600, fontSize: '1rem' }}>
+                                                    {session.datetime ? new Date(session.datetime).toLocaleDateString() : session.date}
+                                                </span>
+                                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                    {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
+                                                </span>
+                                            </div>
+                                            <button
+                                                className="btn btn-sm btn-secondary"
+                                                style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                                                onClick={() => loadHistoricalReport(session.session_id, state?.userId || 0)}
+                                                disabled={loadingHistorySession === session.session_id}
+                                            >
+                                                {loadingHistorySession === session.session_id ? 'Loading...' : 'View Report'}
+                                            </button>
                                         </div>
-                                        <button
-                                            className="btn btn-sm btn-secondary"
-                                            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
-                                            onClick={() => loadHistoricalReport(session.session_id, state?.userId || 0)}
-                                            disabled={loadingHistorySession === session.session_id}
-                                        >
-                                            {loadingHistorySession === session.session_id ? 'Loading...' : 'View Report'}
-                                        </button>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         )}
 
