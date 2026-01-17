@@ -1,9 +1,12 @@
 """
 Database models for LD Screening Assessment.
+Includes User, Session, Question Bank, and Dashboard AI tracking.
 """
 from django.db import models
 
-
+# ==========================================
+# 1. CORE USER & SESSION MANAGEMENT
+# ==========================================
 class User(models.Model):
     """Stores user information for assessment sessions."""
     user_id = models.AutoField(primary_key=True)
@@ -23,6 +26,9 @@ class Session(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
     started_at = models.DateTimeField(auto_now_add=True)
     completed = models.BooleanField(default=False)
+    
+    # Game Logic tracking
+    total_score = models.IntegerField(default=0) 
 
     class Meta:
         db_table = 'sessions'
@@ -31,6 +37,9 @@ class Session(models.Model):
         return f"Session {self.session_id}"
 
 
+# ==========================================
+# 2. QUESTION BANK & RESPONSES
+# ==========================================
 class Question(models.Model):
     """Question bank with domain, difficulty, and options."""
     DOMAIN_CHOICES = [
@@ -71,13 +80,22 @@ class UserResponse(models.Model):
     response_id = models.AutoField(primary_key=True)
     session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='responses')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='responses')
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='responses')
+    
+    # Link to a predefined Question (optional, allows dynamic questions)
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='responses', null=True, blank=True)
+    
+    # Standard Analysis Fields
     domain = models.CharField(max_length=20)
     difficulty = models.CharField(max_length=20)
     correct = models.BooleanField()
     response_time_ms = models.IntegerField()
     confidence = models.CharField(max_length=20, choices=CONFIDENCE_CHOICES, null=True, blank=True)
     answered_at = models.DateTimeField(auto_now_add=True)
+    
+    # [KEPT] Fields required for Gemini Dashboard AI
+    # We still need these so the AI knows "User selected 'b' instead of 'd'"
+    question_text_snapshot = models.TextField(null=True, blank=True) 
+    user_answer_text = models.CharField(max_length=255, null=True, blank=True) 
 
     class Meta:
         db_table = 'user_responses'
@@ -86,6 +104,9 @@ class UserResponse(models.Model):
         return f"Response {self.response_id} - {'Correct' if self.correct else 'Incorrect'}"
 
 
+# ==========================================
+# 3. PREDICTION & MISTAKE PATTERNS
+# ==========================================
 class MistakePattern(models.Model):
     """Mistake fingerprinting for identifying learning disability patterns."""
     SEVERITY_CHOICES = [
@@ -111,9 +132,13 @@ class FinalPrediction(models.Model):
     prediction_id = models.AutoField(primary_key=True)
     session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='predictions')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='predictions')
+    
+    # Scores
     dyslexia_risk_score = models.FloatField()
     dyscalculia_risk_score = models.FloatField()
     attention_risk_score = models.FloatField()
+    
+    # Results
     final_label = models.CharField(max_length=100)
     key_insights = models.JSONField(null=True, blank=True)
     confidence_level = models.CharField(max_length=20, default='moderate')
