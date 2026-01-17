@@ -260,15 +260,17 @@ const Assessment: React.FC = () => {
                     />
                 );
             } else if (difficulty === 'medium') {
+                const generatedItems: { shape: 'circle' | 'square', color: 'blue' | 'orange' }[] = [];
+                for (let i = 0; i < 10; i++) {
+                    generatedItems.push({
+                        shape: Math.random() > 0.5 ? 'circle' : 'square',
+                        color: Math.random() > 0.5 ? 'blue' : 'orange'
+                    });
+                }
                 return (
                     <TaskSwitchSprint
                         initialRule="COLOR"
-                        items={[
-                            { shape: 'circle', color: 'blue' },
-                            { shape: 'square', color: 'orange' },
-                            { shape: 'circle', color: 'orange' },
-                            { shape: 'square', color: 'blue' }
-                        ]}
+                        items={generatedItems}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -276,9 +278,6 @@ const Assessment: React.FC = () => {
             } else {
                 return (
                     <PatternWatcher
-                        expectedPattern={["A", "B", "A", "B"]}
-                        currentItem={Math.random() > 0.2 ? "A" : "C"}
-                        isBreak={false}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -309,8 +308,8 @@ const Assessment: React.FC = () => {
                 return (
                     <VisualMathMatch
                         equation={question_text}
-                        correctValue={5}
-                        options={[4, 5, 6]}
+                        correctValue={parseInt(currentQuestion.correct_option || "0")}
+                        options={currentQuestion.options.map(opt => parseInt(opt))}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -344,6 +343,7 @@ const Assessment: React.FC = () => {
                 return (
                     <ReadAloudEcho
                         sentence={question_text}
+                        correctAnswer={currentQuestion.correct_option}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -406,7 +406,7 @@ const Assessment: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="question-card game-wrapper">
+                <div className="question-card game-wrapper" key={currentQuestion.question_id}>
                     {renderGameComponent()}
                 </div>
             </div>
