@@ -67,6 +67,7 @@ const Dashboard: React.FC = () => {
                 assessmentDate: dashboardData.assessment_date,
                 summary: dashboardData.summary,
                 keyInsights: dashboardData.key_insights,
+                nextSteps: dashboardData.next_steps || [],
                 patterns: {
                     reading: {
                         accuracy: dashboardData.patterns.reading.accuracy,
@@ -100,6 +101,7 @@ const Dashboard: React.FC = () => {
             assessmentDate: "No assessment completed",
             summary: "This is a demo view. Complete an assessment to see real results.",
             keyInsights: [],
+            nextSteps: [],
             patterns: {
                 reading: {
                     accuracy: 72,
@@ -223,6 +225,12 @@ const Dashboard: React.FC = () => {
             ];
         }
 
+        // Use AI-generated next steps if available
+        if (studentData.nextSteps && studentData.nextSteps.length > 0) {
+            return studentData.nextSteps.map((step: string) => ({ text: step }));
+        }
+
+        // Fallback if no AI steps
         return [
             { text: 'Schedule follow-up with learning specialist' },
             { text: 'Implement recommended intervention strategies' },

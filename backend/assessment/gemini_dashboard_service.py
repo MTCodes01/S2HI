@@ -48,21 +48,21 @@ Focus Domain:
 - Common Mistake: {domain_patterns['focus']['common_mistake']}
 """
 
-        prompt = f"""You are an expert educational psychologist and learning specialist analyzing assessment results for a student.
+        prompt = f"""You are a learning specialist analyzing assessment results for a student.
 
 {context}
 
-Based on this data, provide:
+Provide CONCISE feedback:
 
-1. A concise, encouraging summary (2-3 sentences) that gives an overall picture of the student's performance
-2. 3-5 specific, actionable insights about patterns you observe in their performance
-3. Personalized recommendations for each domain (reading, math, focus) that are:
-   - Age-appropriate for a {age_group} year old
-   - Specific to their performance level and mistakes
-   - Practical and implementable by teachers/parents
-   - Encouraging and constructive
+1. Summary: 1-2 sentences highlighting overall performance
+2. Key insights: 3 brief, specific observations (one sentence each)
+3. Recommendations: For each domain, provide ONE practical strategy (max 20 words) that is:
+   - Age-appropriate for {age_group} year old
+   - Specific to their performance
+   - Actionable by teachers/parents
+4. Next steps: 3 specific action items for teachers/parents (max 15 words each)
 
-Keep the tone professional but warm and supportive. Focus on growth potential and specific strategies."""
+Keep responses brief and focused."""
 
         print("📤 Sending request to Gemini...")
         
@@ -77,11 +77,11 @@ Keep the tone professional but warm and supportive. Focus on growth potential an
                     properties={
                         "summary": types.Schema(
                             type=types.Type.STRING,
-                            description="Overall assessment summary in 2-3 sentences"
+                            description="Overall assessment summary in 1-2 sentences"
                         ),
                         "key_insights": types.Schema(
                             type=types.Type.ARRAY,
-                            description="Array of 3-5 specific insights about student performance",
+                            description="Array of 3 specific insights about student performance",
                             items=types.Schema(type=types.Type.STRING)
                         ),
                         "reading_recommendation": types.Schema(
@@ -95,6 +95,11 @@ Keep the tone professional but warm and supportive. Focus on growth potential an
                         "focus_recommendation": types.Schema(
                             type=types.Type.STRING,
                             description="Personalized recommendation for focus domain"
+                        ),
+                        "next_steps": types.Schema(
+                            type=types.Type.ARRAY,
+                            description="Array of 3 specific action items for teachers/parents",
+                            items=types.Schema(type=types.Type.STRING)
                         )
                     },
                     required=[
@@ -102,7 +107,8 @@ Keep the tone professional but warm and supportive. Focus on growth potential an
                         "key_insights",
                         "reading_recommendation",
                         "math_recommendation",
-                        "focus_recommendation"
+                        "focus_recommendation",
+                        "next_steps"
                     ]
                 )
             )
@@ -121,6 +127,7 @@ Keep the tone professional but warm and supportive. Focus on growth potential an
             result.setdefault("reading_recommendation", "Continue current learning approach.")
             result.setdefault("math_recommendation", "Continue current learning approach.")
             result.setdefault("focus_recommendation", "Continue current learning approach.")
+            result.setdefault("next_steps", [])
             
             return result
             

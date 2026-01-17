@@ -107,6 +107,7 @@ export interface DashboardDataResponse {
   assessment_date: string;
   summary: string;
   key_insights: string[];
+  next_steps: string[];
   patterns: {
     reading: DomainPerformance;
     math: DomainPerformance;

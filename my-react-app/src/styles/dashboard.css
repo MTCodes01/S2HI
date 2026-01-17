@@ -172,10 +172,10 @@ body {
 }
 
 .insights-list li {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
   position: relative;
   padding-left: 1.5rem;
 }
@@ -186,7 +186,7 @@ body {
   left: 0;
   color: var(--teal);
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .status-badge.demo {
@@ -436,16 +436,16 @@ body {
 }
 
 .summary-card h4 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--teal);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .summary-card p {
   color: var(--text-secondary);
-  font-size: 0.95rem;
-  line-height: 1.7;
+  font-size: 0.88rem;
+  line-height: 1.5;
   font-weight: 500;
 }
 
@@ -737,28 +737,28 @@ body {
   color: var(--orange);
 }
 
-/* Recommendation - Enhanced for AI-generated content */
+/* Recommendation - Compact display */
 .recommendation {
-  padding: 1.25rem;
+  padding: 1rem;
   background: linear-gradient(135deg, rgba(155, 89, 182, 0.08) 0%, rgba(92, 157, 237, 0.06) 100%);
   border-radius: var(--radius-sm);
   border: 1px dashed rgba(155, 89, 182, 0.2);
 }
 
 .recommendation-header {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--purple);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .recommendation p {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  line-height: 1.7;
+  line-height: 1.5;
   margin: 0;
 }
 

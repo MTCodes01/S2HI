@@ -632,6 +632,7 @@ class GetDashboardDataView(APIView):
         if gemini_insights:
             summary = gemini_insights['summary']
             ai_key_insights = gemini_insights['key_insights']
+            ai_next_steps = gemini_insights.get('next_steps', [])
             
             # Update domain patterns with AI recommendations
             domain_patterns['reading']['recommendation'] = gemini_insights['reading_recommendation']
@@ -642,6 +643,7 @@ class GetDashboardDataView(APIView):
             print("⚠️ Gemini failed, using fallback logic for recommendations")
             summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
             ai_key_insights = key_insights
+            ai_next_steps = []
             # Recommendations are already set by _calculate_domain_patterns fallback
         
         # Format assessment date
@@ -657,6 +659,7 @@ class GetDashboardDataView(APIView):
             'assessment_date': assessment_date,
             'summary': summary,
             'key_insights': ai_key_insights,
+            'next_steps': ai_next_steps,
             'patterns': domain_patterns
         }
         
