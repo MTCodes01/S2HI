@@ -564,14 +564,33 @@ const Dashboard: React.FC = () => {
                                 </div>
                             </div>
                             <ImprovementGraph
-                                data={historyData.map(item => ({
-                                    ...item,
-                                    // Invert risk to show proficiency/capability (1 - risk)
-                                    dyslexia_score: 1.0 - item.dyslexia_score,
-                                    dyscalculia_score: 1.0 - item.dyscalculia_score,
-                                    attention_score: 1.0 - item.attention_score
-                                }))}
-                            />
+    data={historyData
+        // 1. Create a safe copy and sort by date
+        .slice()
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map((item, index) => {
+            // 2. Format with a counter to FORCE separation
+            // Instead of just a date, we make the string totally unique
+            // e.g., "Jan 17 (1)", "Jan 17 (2)", "Jan 17 (3)"
+            const dateObj = new Date(item.date);
+            const shortDate = dateObj.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            });
+
+            return {
+                ...item,
+                // We append the index. This forces the graph to see them as different points.
+                date: `${shortDate} (${index + 1})`,
+
+                // Invert scores
+                dyslexia_score: 1.0 - item.dyslexia_score,
+                dyscalculia_score: 1.0 - item.dyscalculia_score,
+                attention_score: 1.0 - item.attention_score
+            };
+        })}
+
+/>
                         </div>
                     )}
                 </main>
