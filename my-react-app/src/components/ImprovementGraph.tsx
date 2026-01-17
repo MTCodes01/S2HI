@@ -23,6 +23,7 @@ interface HistoryData {
 
 interface ImprovementGraphProps {
     data: HistoryData[];
+    isReport?: boolean;
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -74,7 +75,7 @@ const CustomTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
+const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data, isReport }) => {
     if (!data || data.length === 0) {
         return (
             <div style={{
@@ -125,91 +126,99 @@ const ImprovementGraph: React.FC<ImprovementGraphProps> = ({ data }) => {
         lastDate = currentDate;
     });
 
+    const chartContent = (
+        <LineChart
+            data={sortedData}
+            width={isReport ? 600 : undefined}
+            height={isReport ? 350 : undefined}
+            margin={{
+                top: 20,
+                right: 80,
+                left: 0,
+                bottom: 20,
+            }}
+        >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" vertical={false} />
+
+            <XAxis
+                dataKey={(item) => item.datetime ? new Date(item.datetime).getTime() : new Date(item.date).getTime()}
+                domain={['auto', 'auto']}
+                tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                type="number" // Use time scale
+                scale="time"
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
+                tickLine={false}
+                axisLine={false}
+                dy={10}
+            />
+
+            <YAxis
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
+                tickLine={false}
+                axisLine={false}
+                domain={[0, 1]}
+                tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
+                label={{ value: 'Proficiency Score', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#64748b', fontSize: 12 } }}
+            />
+
+            <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 2 }}
+            />
+
+            <Legend
+                verticalAlign="top"
+                height={36}
+                iconType="circle"
+                wrapperStyle={{ paddingBottom: '20px' }}
+            />
+
+            {/* Proficiency Threshold Lines - High is Good */}
+            <ReferenceLine y={0.8} stroke="rgba(16, 185, 129, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Excellent', fill: '#10b981', fontSize: 10 }} />
+            <ReferenceLine y={0.5} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Needs Practice', fill: '#f59e0b', fontSize: 10 }} />
+
+            <Line
+                type="monotone"
+                dataKey="dyslexia_score"
+                name="Reading"
+                stroke="#3b82f6"
+                strokeWidth={3}
+                dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6 }}
+                connectNulls
+            />
+            <Line
+                type="monotone"
+                dataKey="dyscalculia_score"
+                name="Math"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6 }}
+                connectNulls
+            />
+            <Line
+                type="monotone"
+                dataKey="attention_score"
+                name="Focus"
+                stroke="#8b5cf6"
+                strokeWidth={3}
+                dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6 }}
+                connectNulls
+            />
+        </LineChart>
+    );
+
     return (
-        <div style={{ width: '100%', height: 450 }}>
-            <ResponsiveContainer>
-                <LineChart
-                    data={sortedData} // Use sorted data directly, line charts handle time better
-                    margin={{
-                        top: 20,
-                        right: 30, // More right margin for labels
-                        left: 0,
-                        bottom: 20,
-                    }}
-                >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" vertical={false} />
-
-                    <XAxis
-                        dataKey={(item) => item.datetime ? new Date(item.datetime).getTime() : new Date(item.date).getTime()}
-                        domain={['auto', 'auto']}
-                        tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        type="number" // Use time scale
-                        scale="time"
-                        stroke="#475569"
-                        tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
-                        tickLine={false}
-                        axisLine={false}
-                        dy={10}
-                    />
-
-                    <YAxis
-                        stroke="#475569"
-                        tick={{ fill: '#475569', fontSize: 12, fontWeight: 500 }}
-                        tickLine={false}
-                        axisLine={false}
-                        domain={[0, 1]}
-                        tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
-                        label={{ value: 'Proficiency Score', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#64748b', fontSize: 12 } }}
-                    />
-
-                    <Tooltip
-                        content={<CustomTooltip />}
-                        cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 2 }}
-                    />
-
-                    <Legend
-                        verticalAlign="top"
-                        height={36}
-                        iconType="circle"
-                        wrapperStyle={{ paddingBottom: '20px' }}
-                    />
-
-                    {/* Proficiency Threshold Lines - High is Good */}
-                    <ReferenceLine y={0.8} stroke="rgba(16, 185, 129, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Excellent', fill: '#10b981', fontSize: 10 }} />
-                    <ReferenceLine y={0.5} stroke="rgba(245, 158, 11, 0.4)" strokeDasharray="3 3" label={{ position: 'right', value: 'Needs Practice', fill: '#f59e0b', fontSize: 10 }} />
-
-                    <Line
-                        type="monotone"
-                        dataKey="dyslexia_score"
-                        name="Reading"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 6 }}
-                        connectNulls
-                    />
-                    <Line
-                        type="monotone"
-                        dataKey="dyscalculia_score"
-                        name="Math"
-                        stroke="#10b981"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 6 }}
-                        connectNulls
-                    />
-                    <Line
-                        type="monotone"
-                        dataKey="attention_score"
-                        name="Focus"
-                        stroke="#8b5cf6"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 6 }}
-                        connectNulls
-                    />
-                </LineChart>
-            </ResponsiveContainer>
+        <div style={{ width: '100%', height: isReport ? 350 : 450 }}>
+            {isReport ? chartContent : (
+                <ResponsiveContainer>
+                    {chartContent}
+                </ResponsiveContainer>
+            )}
         </div>
     );
 };

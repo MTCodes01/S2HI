@@ -10,10 +10,10 @@ interface ReportTemplateProps {
 const ReportTemplate = React.forwardRef<HTMLDivElement, ReportTemplateProps>(({ studentData, historyData, period }, ref) => {
 
     const getAccuracyLevel = (accuracy: number) => {
-        if (accuracy >= 85) return { label: 'Excellent', color: '#10b981' };
-        if (accuracy >= 70) return { label: 'Good', color: '#3b82f6' };
-        if (accuracy >= 50) return { label: 'Needs Work', color: '#f59e0b' };
-        return { label: 'Critical', color: '#ef4444' };
+        if (accuracy >= 85) return { label: 'Excellent', color: '#059669', bg: '#ecfdf5' };
+        if (accuracy >= 70) return { label: 'Good', color: '#2563eb', bg: '#eff6ff' };
+        if (accuracy >= 50) return { label: 'Borderline', color: '#d97706', bg: '#fffbeb' };
+        return { label: 'At Risk', color: '#dc2626', bg: '#fef2f2' };
     };
 
     const styles = {
@@ -22,203 +22,337 @@ const ReportTemplate = React.forwardRef<HTMLDivElement, ReportTemplateProps>(({ 
             minHeight: '297mm',
             padding: '20mm',
             background: 'white',
-            color: '#1e293b',
-            fontFamily: 'Inter, sans-serif',
+            color: '#0f172a',
+            fontFamily: "'Inter', sans-serif",
             boxSizing: 'border-box' as const,
             position: 'absolute' as const,
-            top: '-10000px',
-            left: '-10000px',
+            top: '-20000px', // Way out of sight
+            left: '-20000px',
         },
         header: {
-            borderBottom: '2px solid #f1f5f9',
-            paddingBottom: '20px',
+            borderBottom: '3px solid #0f172a',
+            paddingBottom: '15px',
             marginBottom: '30px',
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'baseline'
+            alignItems: 'center',
+            backgroundColor: 'white'
+        },
+        titleBox: {
+            flex: 1
         },
         title: {
-            fontSize: '24px',
-            fontWeight: 800,
+            fontSize: '28px',
+            fontWeight: 900,
             color: '#0f172a',
-            margin: 0
+            margin: 0,
+            letterSpacing: '-0.02em'
         },
         subtitle: {
             fontSize: '14px',
             color: '#64748b',
-            marginTop: '4px'
+            marginTop: '4px',
+            fontWeight: 500,
+            textTransform: 'uppercase' as const,
+            letterSpacing: '0.05em'
         },
-        section: {
-            marginBottom: '30px'
-        },
-        sectionTitle: {
-            fontSize: '16px',
-            fontWeight: 700,
-            color: '#334155',
-            borderLeft: '4px solid #3b82f6',
-            paddingLeft: '10px',
-            marginBottom: '15px'
-        },
-        grid: {
+        metadataGrid: {
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '20px',
-            marginBottom: '20px'
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '15px',
+            marginBottom: '40px',
+            backgroundColor: '#f8fafc',
+            padding: '20px',
+            borderRadius: '12px',
+            border: '1px solid #e2e8f0'
         },
-        card: {
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            padding: '15px',
+        metaItem: {
+            display: 'flex',
+            flexDirection: 'column' as const,
+            gap: '4px',
             backgroundColor: '#f8fafc'
         },
-        label: {
-            fontSize: '12px',
+        metaLabel: {
+            fontSize: '11px',
+            fontWeight: 700,
             color: '#64748b',
-            marginBottom: '4px',
-            display: 'block'
+            textTransform: 'uppercase' as const
         },
-        value: {
-            fontSize: '16px',
+        metaValue: {
+            fontSize: '15px',
             fontWeight: 600,
             color: '#0f172a'
         },
-        domainGrid: {
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: '15px',
-            marginTop: '15px'
+        section: {
+            marginBottom: '40px',
+            backgroundColor: 'white',
+            position: 'relative' as const,
         },
-        domainCard: {
+        sectionHeader: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '20px',
+            borderBottom: '1px solid #e2e8f0',
+            paddingBottom: '10px'
+        },
+        sectionTitle: {
+            fontSize: '18px',
+            fontWeight: 800,
+            color: '#0f172a',
+            margin: 0
+        },
+        summaryBox: {
+            fontSize: '14px',
+            lineHeight: 1.6,
+            color: '#334155',
+            backgroundColor: '#f1f5f9',
+            padding: '20px',
+            borderRadius: '10px',
+            borderLeft: '5px solid #3b82f6'
+        },
+        insightList: {
+            listStyle: 'none',
+            padding: 0,
+            margin: 0,
+            display: 'flex',
+            flexDirection: 'column' as const,
+            gap: '12px'
+        },
+        insightItem: {
+            fontSize: '14px',
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-start'
+        },
+        insightBullet: {
+            color: '#3b82f6',
+            fontWeight: 900,
+            fontSize: '18px',
+            marginTop: '-2px'
+        },
+        domainTable: {
+            width: '100%',
+            borderCollapse: 'collapse' as const,
+            marginTop: '10px'
+        },
+        tableHeader: {
+            textAlign: 'left' as const,
+            fontSize: '11px',
+            fontWeight: 700,
+            color: '#64748b',
+            textTransform: 'uppercase' as const,
+            padding: '12px 15px',
+            backgroundColor: '#f8fafc',
+            borderBottom: '2px solid #e2e8f0'
+        },
+        tableCell: {
+            padding: '15px',
+            borderBottom: '1px solid #f1f5f9',
+            fontSize: '14px'
+        },
+        badge: {
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 700,
+            display: 'inline-block'
+        },
+        stepItem: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '12px',
+            backgroundColor: 'white',
             border: '1px solid #e2e8f0',
             borderRadius: '8px',
-            padding: '15px',
-            textAlign: 'center' as const
-        },
-        domainTitle: {
-            fontSize: '14px',
-            fontWeight: 700,
             marginBottom: '10px',
-            display: 'block',
-            textTransform: 'capitalize' as const
+            fontSize: '14px'
         },
-        accuracyCircle: {
-            width: '60px',
-            height: '60px',
+        stepNumber: {
+            width: '24px',
+            height: '24px',
+            backgroundColor: '#0f172a',
+            color: 'white',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 10px',
-            border: '4px solid',
-            fontWeight: 700
+            fontSize: '12px',
+            fontWeight: 700,
+            flexShrink: 0
         },
-        recommendationBox: {
-            backgroundColor: '#f0f9ff',
-            border: '1px solid #bae6fd',
-            borderRadius: '8px',
-            padding: '15px',
-            marginTop: '10px'
+        signatoryRow: {
+            marginTop: '60px',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '60px'
+        },
+        signLine: {
+            borderTop: '1px solid #0f172a',
+            paddingTop: '8px',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#64748b'
         },
         footer: {
-            marginTop: '50px',
+            marginTop: '60px',
             paddingTop: '20px',
-            borderTop: '1px solid #f1f5f9',
-            fontSize: '10px',
+            borderTop: '1px solid #e2e8f0',
+            fontSize: '11px',
             color: '#94a3b8',
-            textAlign: 'center' as const
+            textAlign: 'center' as const,
+            lineHeight: 1.5
         }
     };
 
     return (
         <div ref={ref} style={styles.container}>
+            {/* Header */}
             <div style={styles.header}>
-                <div>
-                    <h1 style={styles.title}>Learning Assessment Report</h1>
-                    <p style={styles.subtitle}>Generated on {new Date().toLocaleDateString()} • {period}</p>
+                <div style={styles.titleBox}>
+                    <h1 style={styles.title}>SCREENING EVALUATION REPORT</h1>
+                    <p style={styles.subtitle}>S2HI Learning Assessment System • Confidential</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                    <span style={styles.label}>Student ID</span>
-                    <span style={styles.value}>{studentData.studentId}</span>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6' }}>S2HI</div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8' }}>Professional Edition</div>
                 </div>
             </div>
 
-            <div style={styles.grid}>
-                <div style={styles.card}>
-                    <span style={styles.label}>Age Group</span>
-                    <span style={styles.value}>{studentData.ageGroup} years</span>
+            {/* Metadata */}
+            <div style={styles.metadataGrid} className="nobreak">
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Student Identification</span>
+                    <span style={styles.metaValue}>{studentData.studentId}</span>
                 </div>
-                <div style={styles.card}>
-                    <span style={styles.label}>Assessment Date</span>
-                    <span style={styles.value}>{studentData.assessmentDate}</span>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Developmental Stage</span>
+                    <span style={styles.metaValue}>{studentData.ageGroup} Years</span>
                 </div>
-                <div style={styles.card}>
-                    <span style={styles.label}>Risk Level</span>
-                    <span style={{ ...styles.value, color: studentData.riskLevel > 0 ? '#ef4444' : '#10b981' }}>
-                        {studentData.finalRisk} {studentData.riskLevel > 0 ? `(${studentData.riskLevel}%)` : ''}
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Evaluation Date</span>
+                    <span style={styles.metaValue}>{studentData.assessmentDate}</span>
+                </div>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Risk Indication</span>
+                    <span style={{ ...styles.metaValue, color: studentData.riskLevel > 15 ? '#dc2626' : '#059669' }}>
+                        {studentData.finalRisk}
                     </span>
                 </div>
-                <div style={styles.card}>
-                    <span style={styles.label}>Confidence Score</span>
-                    <span style={styles.value}>{studentData.confidence}</span>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Subjective Confidence</span>
+                    <span style={styles.metaValue}>{studentData.confidence}</span>
+                </div>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Evaluation Scope</span>
+                    <span style={styles.metaValue}>{period} Evaluation</span>
+                </div>
+                <div style={styles.metaItem}>
+                    <span style={styles.metaLabel}>Report Status</span>
+                    <span style={styles.metaValue}>Finalised</span>
                 </div>
             </div>
 
-            <div style={{ ...styles.section, marginBottom: '50px' }}>
-                <h3 style={styles.sectionTitle}>Performance Summary</h3>
-                <p style={{ lineHeight: 1.6, fontSize: '14px' }}>{studentData.summary}</p>
-
-                <div style={styles.domainGrid}>
-                    {Object.entries(studentData.patterns).map(([domain, data]: [string, any]) => {
-                        const level = getAccuracyLevel(data.accuracy);
-                        return (
-                            <div key={domain} style={styles.domainCard} className="nobreak">
-                                <span style={styles.domainTitle}>{domain}</span>
-                                <div style={{
-                                    ...styles.accuracyCircle,
-                                    borderColor: level.color,
-                                    color: level.color
-                                }}>
-                                    {data.accuracy}%
-                                </div>
-                                <span style={{ fontSize: '12px', color: level.color, fontWeight: 600 }}>
-                                    {level.label}
-                                </span>
-                            </div>
-                        );
-                    })}
+            {/* Summary */}
+            <section style={styles.section} className="nobreak">
+                <div style={styles.sectionHeader}>
+                    <h2 style={styles.sectionTitle}>I. EXECUTIVE SUMMARY</h2>
                 </div>
-            </div>
+                <div style={styles.summaryBox}>
+                    {studentData.summary}
+                </div>
+            </section>
 
-            <div style={styles.section}>
-                <h3 style={styles.sectionTitle}>Detailed Analysis & Recommendations</h3>
-                {Object.entries(studentData.patterns).map(([domain, data]: [string, any]) => (
-                    <div key={domain} style={{ marginBottom: '15px' }} className="nobreak">
-                        <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 5px 0', textTransform: 'capitalize' }}>{domain}</h4>
-                        <div style={styles.recommendationBox}>
-                            <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
-                                <strong>Observations:</strong> {data.commonMistake !== 'None' ? data.commonMistake : 'Performance is consistent.'}
-                            </p>
-                            <p style={{ margin: '8px 0 0 0', fontSize: '13px', lineHeight: 1.5 }}>
-                                <strong>Recommendation:</strong> {data.recommendation}
-                            </p>
-                        </div>
+            {/* Key Insights */}
+            {studentData.keyInsights && studentData.keyInsights.length > 0 && (
+                <section style={styles.section} className="nobreak">
+                    <div style={styles.sectionHeader}>
+                        <h2 style={styles.sectionTitle}>II. CLINICAL INSIGHTS</h2>
                     </div>
-                ))}
-            </div>
-
-            {historyData.length > 0 && (
-                <div style={styles.section}>
-                    <h3 style={styles.sectionTitle}>Progress Over Time</h3>
-                    <div style={{ height: '300px', width: '100%', marginBottom: '20px' }}>
-                        <ImprovementGraph data={historyData} />
-                    </div>
-                </div>
+                    <ul style={styles.insightList}>
+                        {studentData.keyInsights.map((insight: string, i: number) => (
+                            <li key={i} style={styles.insightItem}>
+                                <span style={styles.insightBullet}>•</span>
+                                <span>{insight}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
             )}
 
-            <div style={{ ...styles.footer, marginTop: '470px' }}>
-                <p>This report is an early screening tool and does not constitute a medical diagnosis. Please consult with a qualified specialist for comprehensive evaluation.</p>
-                <p>&copy; {new Date().getFullYear()} S2HI Learning Assessment System</p>
-            </div>
+            {/* Domain Performance */}
+            <section style={styles.section} className="nobreak">
+                <div style={styles.sectionHeader}>
+                    <h2 style={styles.sectionTitle}>III. DOMAIN-SPECIFIC ANALYSIS</h2>
+                </div>
+                <table style={styles.domainTable}>
+                    <thead>
+                        <tr>
+                            <th style={styles.tableHeader}>Assessment Domain</th>
+                            <th style={styles.tableHeader}>Proficiency</th>
+                            <th style={styles.tableHeader}>Latency</th>
+                            <th style={styles.tableHeader}>Clinical Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Object.entries(studentData.patterns).map(([domain, data]: [string, any]) => {
+                            const level = getAccuracyLevel(data.accuracy);
+                            return (
+                                <tr key={domain}>
+                                    <td style={{ ...styles.tableCell, fontWeight: 700, textTransform: 'capitalize' }}>{domain}</td>
+                                    <td style={styles.tableCell}>
+                                        <div style={{
+                                            ...styles.badge,
+                                            backgroundColor: level.bg,
+                                            color: level.color
+                                        }}>
+                                            {data.accuracy}% - {level.label}
+                                        </div>
+                                    </td>
+                                    <td style={styles.tableCell}>{(data.avgTime / 1000).toFixed(2)}s</td>
+                                    <td style={{ ...styles.tableCell, fontSize: '13px', color: '#475569' }}>{data.recommendation}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </section>
+
+            {/* Next Steps */}
+            {studentData.nextSteps && studentData.nextSteps.length > 0 && (
+                <section style={styles.section} className="nobreak">
+                    <div style={styles.sectionHeader}>
+                        <h2 style={styles.sectionTitle}>IV. INTERVENTION PLAN</h2>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
+                        {studentData.nextSteps.map((step: string, i: number) => (
+                            <div key={i} style={styles.stepItem}>
+                                <div style={styles.stepNumber}>{i + 1}</div>
+                                <span>{step}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Progress Graph */}
+            {historyData.length > 0 && (
+                <section style={styles.section} className="nobreak">
+                    <div style={styles.sectionHeader}>
+                        <h2 style={styles.sectionTitle}>V. LONGITUDINAL PROGRESSION</h2>
+                    </div>
+                    <div style={{ height: '350px', width: '100%', padding: '20px', border: '1px solid #e2e8f0', borderRadius: '12px', backgroundColor: 'white' }}>
+                        <ImprovementGraph data={historyData} isReport={true} />
+                    </div>
+                </section>
+            )}
+
+            {/* Footer */}
+            <footer style={styles.footer}>
+                <p><strong>Clinical Disclaimer:</strong> This report is generated by an algorithmic screening system and is intended for informational and educational purposes only. It does not constitute a formal clinical diagnosis of Dyslexia, Dyscalculia, or ADHD. Final diagnostic conclusions must be made by a qualified healthcare professional or educational psychologist based on a comprehensive multi-battery evaluation.</p>
+                <p style={{ marginTop: '10px' }}>S2HI High-Impact Learning Assessment Systems • Confidential Document • &copy; {new Date().getFullYear()}</p>
+            </footer>
         </div>
     );
 });

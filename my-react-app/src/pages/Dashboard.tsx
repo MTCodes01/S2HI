@@ -27,6 +27,7 @@ const Dashboard: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loadingHistorySession, setLoadingHistorySession] = useState<string | null>(null);
+    const [reportPeriod, setReportPeriod] = useState<string>("Current");
 
     // Check if we have session info to fetch real data
     const hasSessionInfo = state?.userId && state?.sessionId;
@@ -39,6 +40,7 @@ const Dashboard: React.FC = () => {
         try {
             const data = await getDashboardData(userId, sessionId);
             setDashboardData(data);
+            setReportPeriod("Historical");
             setShowHistory(false); // Close modal after loading
         } catch (err) {
             console.error('Failed to load historical report:', err);
@@ -154,13 +156,15 @@ const Dashboard: React.FC = () => {
             // Wait a moment for chart animations to complete in the hidden view
             await new Promise(resolve => setTimeout(resolve, 800));
 
-            // Smart Pagination Logic
+            // Smart Pagination Logic with Margins
             const container = reportRef.current;
             const children = Array.from(container.querySelectorAll('.nobreak')) as HTMLElement[];
-            const A4_HEIGHT_PX = 1122; // Approx A4 height in px at standard screen DPI for A4 css size
+            const A4_HEIGHT_PX = 1122;
+            const BOTTOM_MARGIN = 75; // Equal margin (~20mm)
+            const TOP_MARGIN = 75;    // Equal margin (~20mm)
 
-            // Clear previous margins
-            children.forEach(el => el.style.marginTop = '0px');
+            // Clear previous offsets
+            children.forEach(el => el.style.paddingTop = '0px');
 
             // Force reflow and calculate
             for (const el of children) {
@@ -168,15 +172,17 @@ const Dashboard: React.FC = () => {
                 const containerRect = container.getBoundingClientRect();
 
                 const top = rect.top - containerRect.top;
-                const bottom = top + rect.height;
+                const height = rect.height;
+                const bottom = top + height;
 
-                const pageNumberStart = Math.floor(top / A4_HEIGHT_PX);
-                const pageNumberEnd = Math.floor(bottom / A4_HEIGHT_PX);
+                const pageIndex = Math.floor(top / A4_HEIGHT_PX);
+                const pageBottomBound = (pageIndex + 1) * A4_HEIGHT_PX - BOTTOM_MARGIN;
 
-                if (pageNumberStart !== pageNumberEnd) {
-                    const nextPageTop = (pageNumberStart + 1) * A4_HEIGHT_PX;
-                    const pushAmount = nextPageTop - top;
-                    el.style.marginTop = `${pushAmount + 20}px`;
+                // If the element crosses the bottom margin or starts too close to it
+                if (bottom > pageBottomBound) {
+                    const nextPageStart = (pageIndex + 1) * A4_HEIGHT_PX + TOP_MARGIN;
+                    const pushAmount = nextPageStart - top;
+                    el.style.paddingTop = `${pushAmount}px`;
                 }
             }
 
@@ -290,8 +296,13 @@ const Dashboard: React.FC = () => {
             <ReportTemplate
                 ref={reportRef}
                 studentData={studentData}
-                historyData={historyData}
-                period="Current"
+                historyData={historyData.map(item => ({
+                    ...item,
+                    dyslexia_score: 1.0 - item.dyslexia_score,
+                    dyscalculia_score: 1.0 - item.dyscalculia_score,
+                    attention_score: 1.0 - item.attention_score
+                }))}
+                period={reportPeriod}
             />
 
             {/* Ambient Background Elements */}
@@ -423,8 +434,8 @@ const Dashboard: React.FC = () => {
                                                 {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
                                             </span>
                                         </div>
-                                        <button 
-                                            className="btn btn-sm btn-secondary" 
+                                        <button
+                                            className="btn btn-sm btn-secondary"
                                             style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
                                             onClick={() => loadHistoricalReport(session.session_id, state?.userId || 0)}
                                             disabled={loadingHistorySession === session.session_id}
