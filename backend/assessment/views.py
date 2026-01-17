@@ -842,6 +842,8 @@ class GetUserHistoryView(APIView):
         history_data = []
         for pred in predictions:
             history_data.append({
+                'session_id': pred.session.session_id,  # Added for report switching
+                'datetime': pred.predicted_at.isoformat(),  # Full datetime for frontend
                 'date': pred.predicted_at.strftime('%Y-%m-%d'),
                 'dyslexia_score': pred.dyslexia_risk_score,
                 'dyscalculia_score': pred.dyscalculia_risk_score,
