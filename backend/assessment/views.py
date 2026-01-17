@@ -21,6 +21,7 @@ from .serializers import (
 )
 from .adaptive_logic import get_adaptive_question
 from .ml_utils import get_prediction
+from .gemini_dashboard_service import generate_dashboard_insights
 
 
 class StartSessionView(APIView):
@@ -587,7 +588,7 @@ class GetDashboardDataView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Calculate domain-specific metrics
+        # Calculate domain-specific metrics (without recommendations yet)
         domain_patterns = self._calculate_domain_patterns(responses)
         
         # Map risk type to display name
@@ -605,17 +606,58 @@ class GetDashboardDataView(APIView):
             'high': 85
         }
         
-        # Prepare response data
+        # Prepare prediction data
         if prediction:
             final_risk = risk_labels.get(prediction.final_label, prediction.final_label)
             confidence = prediction.confidence_level.capitalize()
             risk_level = risk_levels.get(prediction.confidence_level, 50)
             key_insights = prediction.key_insights
+            
+            # Prepare prediction data for Gemini
+            prediction_data = {
+                'final_label': prediction.final_label,
+                'confidence_level': prediction.confidence_level,
+                'dyslexia_score': prediction.dyslexia_risk_score,
+                'dyscalculia_score': prediction.dyscalculia_risk_score,
+                'attention_score': prediction.attention_risk_score
+            }
         else:
             final_risk = "Assessment In Progress"
             confidence = "N/A"
             risk_level = 0
             key_insights = []
+            prediction_data = {
+                'final_label': 'in-progress',
+                'confidence_level': 'N/A',
+                'dyslexia_score': 0,
+                'dyscalculia_score': 0,
+                'attention_score': 0
+            }
+        
+        # 🤖 Use Gemini AI to generate personalized insights and recommendations
+        total_questions = responses.count()
+        gemini_insights = generate_dashboard_insights(
+            age_group=user.age_group,
+            domain_patterns=domain_patterns,
+            prediction_data=prediction_data,
+            total_questions=total_questions
+        )
+        
+        # Use Gemini-generated content if available, otherwise use fallback
+        if gemini_insights:
+            summary = gemini_insights['summary']
+            ai_key_insights = gemini_insights['key_insights']
+            
+            # Update domain patterns with AI recommendations
+            domain_patterns['reading']['recommendation'] = gemini_insights['reading_recommendation']
+            domain_patterns['math']['recommendation'] = gemini_insights['math_recommendation']
+            domain_patterns['focus']['recommendation'] = gemini_insights['focus_recommendation']
+        else:
+            # Fallback to basic summary if Gemini fails
+            print("⚠️ Gemini failed, using fallback logic for recommendations")
+            summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
+            ai_key_insights = key_insights
+            # Recommendations are already set by _calculate_domain_patterns fallback
         
         # Format assessment date
         from datetime import datetime
@@ -628,8 +670,8 @@ class GetDashboardDataView(APIView):
             'confidence': confidence,
             'risk_level': risk_level,
             'assessment_date': assessment_date,
-            'summary': ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.',
-            'key_insights': key_insights,
+            'summary': summary,
+            'key_insights': ai_key_insights,
             'patterns': domain_patterns
         }
         
@@ -683,13 +725,14 @@ class GetDashboardDataView(APIView):
                         mistakes.append(mistake.mistake_type)
             
             common_mistake = self._get_common_mistake(mistakes, domain)
-            recommendation = self._get_recommendation(domain, accuracy, avg_time, common_mistake)
+            # Recommendation will be filled by Gemini or fallback
+            fallback_recommendation = self._get_recommendation(domain, accuracy, avg_time, common_mistake)
             
             patterns[domain] = {
                 'accuracy': round(accuracy, 1),
                 'avg_time': round(avg_time, 1),
                 'common_mistake': common_mistake,
-                'recommendation': recommendation
+                'recommendation': fallback_recommendation  # Used as fallback if Gemini fails
             }
         
         return patterns

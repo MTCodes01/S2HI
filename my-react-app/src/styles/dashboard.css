@@ -11,7 +11,7 @@
   --text-dark: #1e293b;
   --text-sub: #64748b;
   --radius-xl: 24px;
-  
+
   /* Legacy/Specific variables maintained for compatibility but updated values */
   --blue: #3b82f6;
   --teal: #00d4aa;
@@ -24,20 +24,20 @@
   --green-light: #dcfce7;
   --yellow: #f59e0b;
   --yellow-light: #fef3c7;
-  
+
   --text-primary: #1e293b;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
   --border-color: rgba(226, 232, 240, 0.8);
-  
+
   --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  
+
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 20px;
   --radius-full: 9999px;
-  
+
   --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
   --gradient-warm: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
 }
@@ -52,7 +52,7 @@
   /* Background is now handled by the parent body/page style or we can enforce it here if needed, 
      but typically the assessment page has it on .assessment-page. 
      We'll assume the body has the gradient or we set it here to be safe. */
-  background: transparent; 
+  background: transparent;
   z-index: 1;
 }
 
@@ -67,7 +67,8 @@ body {
    AMBIENT BACKGROUND - COPIED FROM ASSESSMENT
    ============================================ */
 .ambient-orb {
-  position: fixed; /* Fixed so it stays while scrolling */
+  position: fixed;
+  /* Fixed so it stays while scrolling */
   border-radius: 50%;
   filter: blur(80px);
   z-index: -1;
@@ -94,9 +95,19 @@ body {
 }
 
 @keyframes floatOrb {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(50px, 50px); }
-  66% { transform: translate(-30px, 80px); }
+
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  33% {
+    transform: translate(50px, 50px);
+  }
+
+  66% {
+    transform: translate(-30px, 80px);
+  }
 }
 
 /* ============================================
@@ -113,7 +124,7 @@ body {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.graph-card{
+.graph-card {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -153,10 +164,35 @@ body {
    RESTORED LAYOUT STYLES
    ============================================ */
 
-/* Insights List */
-.insights-list { margin-top: 1rem; padding-left: 1.25rem; list-style: disc; }
-.insights-list li { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5; }
-.status-badge.demo { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+/* Insights List - Enhanced for AI-generated content */
+.insights-list {
+  margin-top: 1rem;
+  padding-left: 1.25rem;
+  list-style: none;
+}
+
+.insights-list li {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.insights-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--teal);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.status-badge.demo {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+}
 
 .dashboard-header {
   display: flex;
@@ -317,7 +353,7 @@ body {
   justify-content: center;
   background: rgba(255, 255, 255, 0.5);
   border-radius: var(--radius-sm);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .profile-card {
@@ -408,8 +444,9 @@ body {
 
 .summary-card p {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  font-weight: 500;
 }
 
 /* Next Steps Card */
@@ -484,14 +521,15 @@ body {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
-  padding: 2rem; /* Kept generous */
+  padding: 2rem;
+  /* Kept generous */
   transition: all 0.3s ease;
   box-shadow: var(--glass-shadow);
 }
 
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px -5px rgba(0,0,0,0.1);
+  box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
   border-color: rgba(255, 255, 255, 0.9);
 }
 
@@ -512,9 +550,17 @@ body {
   height: 4px;
 }
 
-.domain-reading::before { background: var(--coral); }
-.domain-math::before { background: var(--green); }
-.domain-focus::before { background: var(--yellow); }
+.domain-reading::before {
+  background: var(--coral);
+}
+
+.domain-math::before {
+  background: var(--green);
+}
+
+.domain-focus::before {
+  background: var(--yellow);
+}
 
 .domain-header {
   display: flex;
@@ -548,10 +594,25 @@ body {
   letter-spacing: 0.03em;
 }
 
-.level-excellent { background: rgba(46, 204, 113, 0.15); color: var(--green); }
-.level-good { background: rgba(78, 205, 196, 0.15); color: var(--teal); }
-.level-warning { background: rgba(255, 200, 87, 0.15); color: #e6a800; }
-.level-critical { background: rgba(255, 107, 107, 0.15); color: var(--coral); }
+.level-excellent {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--green);
+}
+
+.level-good {
+  background: rgba(78, 205, 196, 0.15);
+  color: var(--teal);
+}
+
+.level-warning {
+  background: rgba(255, 200, 87, 0.15);
+  color: #e6a800;
+}
+
+.level-critical {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--coral);
+}
 
 /* Accuracy Display */
 .accuracy-display {
@@ -570,40 +631,40 @@ body {
   justify-content: center;
   position: relative;
   /* Use conic-gradient for dynamic progress */
-  background: conic-gradient(
-    var(--circle-color) calc(var(--accuracy) * 1%),
-    var(--circle-bg) 0
-  );
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+  background: conic-gradient(var(--circle-color) calc(var(--accuracy) * 1%),
+      var(--circle-bg) 0);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
 /* Inner circle to create the ring effect */
 .accuracy-circle::after {
   content: '';
   position: absolute;
-  inset: 8px; /* Control thickness of the ring */
+  inset: 8px;
+  /* Control thickness of the ring */
   background: white;
   border-radius: 50%;
   z-index: 1;
 }
 
 /* Ensure text is above the inner circle */
-.accuracy-value, .accuracy-label {
+.accuracy-value,
+.accuracy-label {
   position: relative;
   z-index: 2;
 }
 
-.accuracy-circle.reading { 
+.accuracy-circle.reading {
   --circle-color: var(--coral);
   --circle-bg: var(--coral-light);
 }
 
-.accuracy-circle.math { 
+.accuracy-circle.math {
   --circle-color: var(--green);
   --circle-bg: var(--green-light);
 }
 
-.accuracy-circle.focus { 
+.accuracy-circle.focus {
   --circle-color: var(--yellow);
   --circle-bg: var(--yellow-light);
 }
@@ -676,9 +737,9 @@ body {
   color: var(--orange);
 }
 
-/* Recommendation */
+/* Recommendation - Enhanced for AI-generated content */
 .recommendation {
-  padding: 1rem;
+  padding: 1.25rem;
   background: linear-gradient(135deg, rgba(155, 89, 182, 0.08) 0%, rgba(92, 157, 237, 0.06) 100%);
   border-radius: var(--radius-sm);
   border: 1px dashed rgba(155, 89, 182, 0.2);
@@ -688,16 +749,16 @@ body {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--purple);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
 .recommendation p {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.7;
   margin: 0;
 }
 
@@ -740,6 +801,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -747,9 +809,19 @@ body {
 }
 
 @keyframes wiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-5deg); }
-  75% { transform: rotate(5deg); }
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-5deg);
+  }
+
+  75% {
+    transform: rotate(5deg);
+  }
 }
 
 /* ============================================
@@ -759,12 +831,12 @@ body {
   .main-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .sidebar {
     flex-direction: row;
     flex-wrap: wrap;
   }
-  
+
   .sidebar .card {
     flex: 1;
     min-width: 250px;
@@ -775,33 +847,33 @@ body {
   .dashboard-container {
     padding: 1.25rem;
   }
-  
+
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .header-actions {
     width: 100%;
   }
-  
+
   .header-actions .btn {
     flex: 1;
     justify-content: center;
   }
-  
+
   .stats-row {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .domain-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .sidebar {
     flex-direction: column;
   }
-  
+
   .sidebar .card {
     min-width: auto;
   }
@@ -811,7 +883,7 @@ body {
   .stats-row {
     grid-template-columns: 1fr;
   }
-  
+
   .dashboard-title {
     font-size: 1.75rem;
   }
