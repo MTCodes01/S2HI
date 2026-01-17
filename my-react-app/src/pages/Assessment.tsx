@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { startSession, getNextQuestion, submitAnswer, endSession } from '../services/api';
-import type { Question, AssessmentResult } from '../types/types';
+import type { Question, AssessmentResult, AudioAnalysisResult } from '../types/types';
 import Mascot from '../components/Mascot';
+import ReadingAloud from './ReadingAloud';
 import '../styles/assessment.css';
 
 // Game Imports
@@ -20,7 +21,7 @@ import TaskSwitchSprint from '../games/TaskSwitchSprint';
 import PlanAheadPuzzle from '../games/PlanAheadPuzzle';
 import ConfidenceSlider from '../games/ConfidenceSlider';
 
-type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'confidence' | 'complete' | 'error';
+type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'confidence' | 'reading' | 'complete' | 'error';
 
 const Assessment: React.FC = () => {
     const navigate = useNavigate();
@@ -39,6 +40,9 @@ const Assessment: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [results, setResults] = useState<AssessmentResult | null>(null);
     const [confidenceScore, setConfidenceScore] = useState<number>(50);
+
+    // Reading results from voice recording phase
+    const [readingResults, setReadingResults] = useState<AudioAnalysisResult | null>(null);
 
     // Timer ref
     const startTimeRef = useRef<number>(0);
@@ -136,6 +140,7 @@ const Assessment: React.FC = () => {
         navigate('/dashboard', {
             state: {
                 results,
+                readingResults,
                 userId,
                 sessionId,
                 ageGroup
@@ -155,11 +160,18 @@ const Assessment: React.FC = () => {
             const sessionResults = await endSession(userId, sessionId, confLevel);
 
             setResults({ ...sessionResults, confidence_level: confLevel });
-            setPhase('complete');
+            // Move to reading assessment phase
+            setPhase('reading');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to finalize session');
             setPhase('error');
         }
+    };
+
+    // Handle completion of reading aloud assessment
+    const handleReadingComplete = (audioResults: AudioAnalysisResult | null) => {
+        setReadingResults(audioResults);
+        setPhase('complete');
     };
 
     // Restart assessment
@@ -169,6 +181,7 @@ const Assessment: React.FC = () => {
         setCurrentQuestion(null);
         setQuestionNumber(0);
         setResults(null);
+        setReadingResults(null);
         setError(null);
         setPhase('welcome');
     };
@@ -479,12 +492,37 @@ const Assessment: React.FC = () => {
         </div>
     );
 
+    // Render reading aloud phase
+    const renderReading = () => {
+        if (!userId || !sessionId) {
+            return (
+                <div className="error-container">
+                    <div className="error-card">
+                        <div className="error-icon">⚠️</div>
+                        <h2>Session Error</h2>
+                        <p>Session data is missing. Please restart the assessment.</p>
+                        <button className="retry-btn" onClick={handleRestart}>Restart</button>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <ReadingAloud
+                userId={userId}
+                sessionId={sessionId}
+                ageGroup={ageGroup}
+                onComplete={handleReadingComplete}
+            />
+        );
+    };
+
     return (
         <div className="assessment-page">
             {phase === 'welcome' && renderWelcome()}
             {phase === 'question' && renderQuestion()}
             {phase === 'loading' && renderLoading()}
             {phase === 'confidence' && renderConfidence()}
+            {phase === 'reading' && renderReading()}
             {phase === 'complete' && renderComplete()}
             {phase === 'error' && renderError()}
         </div>
