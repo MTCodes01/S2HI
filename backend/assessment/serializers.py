@@ -1,15 +1,12 @@
 """
 Serializers for assessment API endpoints.
-Updated to include AI Dashboard fields.
 """
 from rest_framework import serializers
 
-# ==========================================
-# 1. START SESSION
-# ==========================================
+
 class StartSessionRequestSerializer(serializers.Serializer):
     """Request serializer for starting a new session."""
-    age_group = serializers.CharField(max_length=20, default="8-10")
+    age_group = serializers.CharField(max_length=20)
     user_id = serializers.IntegerField(required=False, allow_null=True)
 
 
@@ -19,14 +16,10 @@ class StartSessionResponseSerializer(serializers.Serializer):
     session_id = serializers.CharField()
 
 
-# ==========================================
-# 2. GET NEXT QUESTION
-# ==========================================
 class GetNextQuestionRequestSerializer(serializers.Serializer):
     """Request serializer for getting next question."""
+    user_id = serializers.IntegerField()
     session_id = serializers.CharField()
-    # User ID is optional here as session_id is unique enough, but good for validation
-    user_id = serializers.IntegerField(required=False) 
     last_question_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     correct = serializers.BooleanField(required=False, allow_null=True)
     response_time_ms = serializers.IntegerField(required=False, allow_null=True)
@@ -39,12 +32,8 @@ class QuestionResponseSerializer(serializers.Serializer):
     difficulty = serializers.CharField()
     question_text = serializers.CharField()
     options = serializers.ListField(child=serializers.CharField())
-    correct_option = serializers.CharField(required=False) # Helper for frontend testing
 
 
-# ==========================================
-# 3. SUBMIT ANSWER
-# ==========================================
 class SubmitAnswerRequestSerializer(serializers.Serializer):
     """Request serializer for submitting an answer."""
     user_id = serializers.IntegerField()
@@ -64,9 +53,6 @@ class SubmitAnswerResponseSerializer(serializers.Serializer):
     response_id = serializers.IntegerField()
 
 
-# ==========================================
-# 4. END SESSION
-# ==========================================
 class EndSessionRequestSerializer(serializers.Serializer):
     """Request serializer for ending a session."""
     user_id = serializers.IntegerField()
@@ -81,9 +67,6 @@ class EndSessionResponseSerializer(serializers.Serializer):
     key_insights = serializers.ListField(child=serializers.CharField())
 
 
-# ==========================================
-# 5. DASHBOARD & HISTORY
-# ==========================================
 class GetUserHistoryRequestSerializer(serializers.Serializer):
     """Request serializer for getting user history."""
     user_id = serializers.IntegerField()
@@ -104,22 +87,13 @@ class DomainPerformanceSerializer(serializers.Serializer):
 
 
 class DashboardDataResponseSerializer(serializers.Serializer):
-    """
-    Response serializer for dashboard data.
-    UPDATED: Includes AI-generated fields.
-    """
+    """Response serializer for dashboard data."""
     student_id = serializers.CharField()
     age_group = serializers.CharField()
     final_risk = serializers.CharField()
     confidence = serializers.CharField()
     risk_level = serializers.FloatField()
     assessment_date = serializers.CharField()
-    
-    # AI Summary Fields
     summary = serializers.CharField()
     key_insights = serializers.ListField(child=serializers.CharField())
-    ai_strengths = serializers.ListField(child=serializers.CharField(), required=False)
-    ai_recommendation = serializers.CharField(required=False, allow_blank=True)
-    
-    # Nested patterns
     patterns = serializers.DictField(child=DomainPerformanceSerializer())

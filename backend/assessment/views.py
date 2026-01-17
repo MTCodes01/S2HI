@@ -1,23 +1,10 @@
 """
 API Views for LD Screening Assessment.
-Integrated with Gemini AI and ML Risk Classifiers.
 """
-import os
-import sys
-import joblib
-import pandas as pd
-import numpy as np
-import traceback
-import json
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
-from django.conf import settings
-
-# Google Gemini Imports
-from google import genai
-from google.genai import types
 
 from .models import User, Session, Question, UserResponse, MistakePattern, FinalPrediction
 from .serializers import (
@@ -31,93 +18,27 @@ from .serializers import (
     EndSessionResponseSerializer,
     GetDashboardDataRequestSerializer,
     DashboardDataResponseSerializer,
-    GetUserHistoryRequestSerializer
 )
 from .adaptive_logic import get_adaptive_question
+from .ml_utils import get_prediction
 
-# ==========================================
-# 🧠 AI SETUP (Internal Helpers)
-# ==========================================
-
-# 1. Setup Gemini Client
-try:
-    gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-except AttributeError:
-    gemini_client = None
-    print("⚠️ GEMINI_API_KEY missing. AI Summaries will be disabled.")
-
-# 2. Risk Model Loader (Singleton Pattern)
-_risk_model = None
-
-def get_risk_model():
-    global _risk_model
-    if _risk_model is None:
-        try:
-            # Look for risk_classifier.pkl in current dir or base dir
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            paths = [
-                os.path.join(current_dir, 'risk_classifier.pkl'),
-                os.path.join(settings.BASE_DIR, 'risk_classifier.pkl')
-            ]
-            for path in paths:
-                if os.path.exists(path):
-                    _risk_model = joblib.load(path)
-                    print(f"✅ Risk Model loaded from {path}")
-                    break
-        except Exception as e:
-            print(f"❌ Error loading risk model: {e}")
-    return _risk_model
-
-def generate_gemini_report(history_text, user_id):
-    """Generates a clinical summary using Gemini."""
-    if not gemini_client:
-        return {}
-
-    prompt = f"""
-    Act as an Educational Psychologist. Analyze this student's assessment data.
-    Student ID: {user_id}
-    
-    Session History:
-    {history_text}
-    
-    Identify signs of Dyslexia (letter reversals), Dyscalculia (math errors), or ADHD (speed/focus).
-    
-    Output JSON with these keys: "overall_performance" (string), "specific_issues" (list), "strengths" (list), "recommended_focus" (string).
-    """
-    
-    try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "overall_performance": types.Schema(type=types.Type.STRING),
-                        "specific_issues": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
-                        "strengths": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
-                        "recommended_focus": types.Schema(type=types.Type.STRING)
-                    }
-                )
-            )
-        )
-        return json.loads(response.text)
-    except Exception as e:
-        print(f"Gemini Error: {e}")
-        return {}
-
-# ==========================================
-# 🎮 API VIEWS
-# ==========================================
 
 class StartSessionView(APIView):
     """
     POST /start-session/
+    
     Create a new user and session.
+    
+    Request:
+        {"age_group": "9-11"}
+    
+    Response:
+        {"user_id": 101, "session_id": "S_101_01"}
     """
+    
     def post(self, request):
         serializer = StartSessionRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -125,168 +46,338 @@ class StartSessionView(APIView):
         user_id = serializer.validated_data.get('user_id')
         
         with transaction.atomic():
+            # Create or get user
             if user_id:
                 try:
                     user = User.objects.get(user_id=user_id)
+                    # Update age group if changed? Optional.
                     user.age_group = age_group
                     user.save()
                 except User.DoesNotExist:
+                    # Fallback to create if ID provided but not found
                     user = User.objects.create(age_group=age_group)
             else:
                 user = User.objects.create(age_group=age_group)
             
+            # Generate session ID
             session_count = Session.objects.filter(user=user).count()
             session_id = f"S_{user.user_id}_{session_count + 1:02d}"
             
-            session = Session.objects.create(session_id=session_id, user=user)
+            # Create session
+            session = Session.objects.create(
+                session_id=session_id,
+                user=user
+            )
         
-        return Response({'user_id': user.user_id, 'session_id': session.session_id}, status=status.HTTP_201_CREATED)
+        response_data = {
+            'user_id': user.user_id,
+            'session_id': session.session_id
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class GetNextQuestionView(APIView):
     """
     POST /get-next-question/
+    
     Get the next adaptive question based on user performance.
+    
+    Request:
+        {
+            "user_id": 101,
+            "session_id": "S_101_01",
+            "last_question_id": "R_05",
+            "correct": false,
+            "response_time_ms": 980
+        }
+    
+    Response:
+        {
+            "question_id": "R_06",
+            "domain": "reading",
+            "difficulty": "medium",
+            "question_text": "Which letter is this?",
+            "options": ["b", "d", "p", "q"]
+        }
     """
+    
     def post(self, request):
         serializer = GetNextQuestionRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
         session_id = data['session_id']
+        last_question_id = data.get('last_question_id')
+        correct = data.get('correct')
+        response_time_ms = data.get('response_time_ms')
         
+        # Validate session exists
         try:
             session = Session.objects.get(session_id=session_id)
         except Session.DoesNotExist:
-            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': 'Session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
+        # Get next adaptive question using ML model
         try:
-            # Load question generator model
+            import joblib
+            import os
+            import numpy as np
+            from django.conf import settings
+            
+            import sys
+            
+            # Ensure the current directory is in sys.path so the unpickler can find 'question_generator_model'
             current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.append(current_dir)
+
+            # Load question generator model (trained by team)
+            # Check multiple locations and names
             paths_to_check = [
-                os.path.join(current_dir, 'question_model.pkl'),
+                os.path.join(current_dir, 'question_model.pkl'),       # Trained script output
+                os.path.join(settings.BASE_DIR, 'question_generator.pkl'), # Old location
                 os.path.join(settings.BASE_DIR, 'question_model.pkl')
             ]
             
-            generator = None
+            generator_path = None
             for path in paths_to_check:
                 if os.path.exists(path):
-                    generator = joblib.load(path)
+                    generator_path = path
                     break
             
-            if generator:
-                # Calculate current state for the model
+            if generator_path:
+                generator = joblib.load(generator_path)
+                
+                # Get previous responses to determine current state
                 responses = UserResponse.objects.filter(session=session).order_by('-answered_at')
                 
-                # Default init state
-                is_correct = 1
-                time_ms = 0
-                d_easy, d_medium, d_hard = 1, 0, 0
-                session_accuracy = 1.0
-                cur_domain = 0
+                # Calculate session accuracy
+                total_responses = responses.count()
+                correct_count = responses.filter(correct=True).count()
+                session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
+                
+                # Only 3 domains for assessment: reading, math, attention
                 domain_map = {'reading': 0, 'math': 1, 'attention': 2}
-
+                
                 if responses.exists():
                     last_response = responses.first()
-                    is_correct = 1 if data.get('correct') else 0
-                    time_ms = data.get('response_time_ms', 2000)
                     
-                    if last_response.difficulty == 'medium': d_medium = 1; d_easy = 0
-                    elif last_response.difficulty == 'hard': d_hard = 1; d_easy = 0
+                    # 1. Last Correct
+                    is_correct = 1 if correct else 0
                     
-                    total = responses.count()
-                    correct_c = responses.filter(correct=True).count()
-                    session_accuracy = correct_c / total if total > 0 else 1.0
+                    # 2. Last Response Time
+                    time_ms = response_time_ms if response_time_ms is not None else 2000
+                    
+                    # 3-5. Difficulty One-Hot
+                    last_diff = last_response.difficulty
+                    d_easy = 1 if last_diff == 'easy' else 0
+                    d_medium = 1 if last_diff == 'medium' else 0
+                    d_hard = 1 if last_diff == 'hard' else 0
+                    
+                    # 6. Session Accuracy (computed above)
+                    
+                    # 7. Current Domain (integer) - map to 0, 1, or 2
                     cur_domain = domain_map.get(last_response.domain, 0)
-
-                features = np.array([[is_correct, time_ms, d_easy, d_medium, d_hard, session_accuracy, cur_domain]])
-                
-                # Predict next
-                prediction = generator.predict(features)
-                if len(prediction.shape) == 2 and prediction.shape[1] == 2:
-                    next_domain_idx, next_diff_idx = int(prediction[0][0]), int(prediction[0][1])
+                    
                 else:
-                    next_domain_idx, next_diff_idx = 0, 1
-
+                    # First question defaults
+                    is_correct = 1
+                    time_ms = 0
+                    d_easy = 1
+                    d_medium = 0
+                    d_hard = 0
+                    session_accuracy = 1.0
+                    cur_domain = 0
+                
+                # Prepare features for model: 
+                # [last_correct, last_response_time, diff_easy, diff_medium, diff_hard, session_accuracy, current_domain]
+                features = np.array([[
+                    is_correct, 
+                    time_ms, 
+                    d_easy, 
+                    d_medium, 
+                    d_hard, 
+                    session_accuracy, 
+                    cur_domain
+                ]])
+                
+                # Predict next domain and difficulty
+                prediction = generator.predict(features)
+                
+                # Parse prediction (returns [[domain, difficulty]])
+                if len(prediction.shape) == 2 and prediction.shape[1] == 2:
+                    next_domain_idx = int(prediction[0][0])
+                    next_diff_idx = int(prediction[0][1])
+                else:
+                    # Fallback
+                    next_domain_idx = 0
+                    next_diff_idx = 1
+                
+                # Map indices to names (only 3 domains)
                 domain_names = {0: 'reading', 1: 'math', 2: 'attention'}
                 diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
                 
-                next_domain = domain_names.get(next_domain_idx, 'reading')
+                # Apply domain rotation to ensure variety
+                # Count how many times each domain has appeared
+                domain_counts = {
+                    'reading': responses.filter(domain='reading').count(),
+                    'math': responses.filter(domain='math').count(),
+                    'attention': responses.filter(domain='attention').count()
+                }
+                
+                # Get predicted domain
+                predicted_domain = domain_names.get(next_domain_idx, 'reading')
+                
+                # If predicted domain has appeared 3+ times more than another domain, rotate
+                min_count = min(domain_counts.values()) if domain_counts else 0
+                max_count = max(domain_counts.values()) if domain_counts else 0
+                
+                if domain_counts.get(predicted_domain, 0) >= min_count + 3:
+                    # Force rotation to least-used domain
+                    next_domain = min(domain_counts, key=domain_counts.get)
+                    print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
+                else:
+                    next_domain = predicted_domain
+                
                 next_difficulty = diff_names.get(next_diff_idx, 'medium')
                 
-                # Check session length
-                response_count = UserResponse.objects.filter(session=session).count()
-                if response_count >= 30:
-                    return Response({'message': 'Assessment complete!', 'end_session': True}, status=status.HTTP_200_OK)
+                # Debug logging
+                print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
+                print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
                 
-                # Generate
+                # Check if session should end (15-20 questions)
+                response_count = UserResponse.objects.filter(session=session).count()
+                
+                if response_count >= 30:
+                    # End session automatically
+                    return Response(
+                        {
+                            'message': 'Assessment complete! Generating your results...',
+                            'end_session': True,
+                            'total_questions': response_count
+                        },
+                        status=status.HTTP_200_OK
+                    )
+                
+                # 🎯 GENERATE QUESTION DYNAMICALLY using the model
                 question_data = generator.generate_question(next_domain, next_difficulty)
+                
+                # Create a unique question ID
                 question_id = f"Q_{session_id}_{response_count + 1}"
                 
-                return Response({
+                response_data = {
                     'question_id': question_id,
                     'domain': question_data['domain'],
                     'difficulty': question_data['difficulty'],
                     'question_text': question_data['question_text'],
                     'options': question_data['options'],
-                    'correct_option': question_data['correct_option']
-                }, status=status.HTTP_200_OK)
-            
+                    'correct_option': question_data['correct_option']  # Include for answer validation
+                }
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+                
             else:
-                # Fallback to logic if model missing
+                # Fallback to database if generator not found
                 question = get_adaptive_question(
                     session_id=session_id,
-                    last_question_id=data.get('last_question_id'),
-                    correct=data.get('correct'),
-                    response_time_ms=data.get('response_time_ms')
+                    last_question_id=last_question_id,
+                    correct=correct,
+                    response_time_ms=response_time_ms
                 )
-                if not question:
-                    return Response({'message': 'End of questions', 'end_session': True}, status=status.HTTP_200_OK)
                 
-                return Response({
+                if not question:
+                    return Response(
+                        {'message': 'No more questions available', 'end_session': True},
+                        status=status.HTTP_200_OK
+                    )
+                
+                response_data = {
                     'question_id': question.question_id,
                     'domain': question.domain,
                     'difficulty': question.difficulty,
                     'question_text': question.question_text,
                     'options': question.options
-                }, status=status.HTTP_200_OK)
-
+                }
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+                
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            import traceback
+            return Response(
+                {'error': f'Question generation failed: {str(e)}', 'traceback': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SubmitAnswerView(APIView):
     """
     POST /submit-answer/
+    
     Store user response and mistake pattern.
+    
+    Request:
+        {
+            "user_id": 101,
+            "session_id": "S_101_01",
+            "question_id": "R_05",
+            "domain": "reading",
+            "difficulty": "medium",
+            "correct": false,
+            "response_time_ms": 980,
+            "confidence": "low",
+            "mistake_type": "letter_reversal"
+        }
+    
+    Response:
+        {"status": "success", "response_id": 1}
     """
+    
     def post(self, request):
         serializer = SubmitAnswerRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
         
+        # Validate user, session, and question exist
         try:
             user = User.objects.get(user_id=data['user_id'])
-            session = Session.objects.get(session_id=data['session_id'])
-        except (User.DoesNotExist, Session.DoesNotExist):
-            return Response({'error': 'User or Session not found'}, status=status.HTTP_404_NOT_FOUND)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
-        # Ensure question exists (or create temp for dynamic)
-        question, _ = Question.objects.get_or_create(
-            question_id=data['question_id'],
-            defaults={
-                'domain': data['domain'],
-                'difficulty': data['difficulty'],
-                'question_text': 'Dynamic Question',
-                'options': [],
-                'correct_option': 'unknown'
-            }
-        )
-
+        try:
+            session = Session.objects.get(session_id=data['session_id'])
+        except Session.DoesNotExist:
+            return Response(
+                {'error': 'Session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            question = Question.objects.get(question_id=data['question_id'])
+        except Question.DoesNotExist:
+            # Create question if it doesn't exist (for testing)
+            question = Question.objects.create(
+                question_id=data['question_id'],
+                domain=data['domain'],
+                difficulty=data['difficulty'],
+                question_text='Test question',
+                options=['a', 'b', 'c', 'd'],
+                correct_option='a'
+            )
+        
         with transaction.atomic():
+            # Create user response
             user_response = UserResponse.objects.create(
                 session=session,
                 user=user,
@@ -295,230 +386,418 @@ class SubmitAnswerView(APIView):
                 difficulty=data['difficulty'],
                 correct=data['correct'],
                 response_time_ms=data['response_time_ms'],
-                confidence=data.get('confidence'),
-                # Add text snapshots for Gemini if available in request, else generic
-                question_text_snapshot=getattr(question, 'question_text', ''),
-                user_answer_text=str(data.get('correct')) # Simplified for now
+                confidence=data.get('confidence')
             )
             
-            if data.get('mistake_type') and not data['correct']:
+            # Create mistake pattern if provided and answer is incorrect
+            mistake_type = data.get('mistake_type')
+            if mistake_type and not data['correct']:
+                # Determine severity based on mistake type
                 severity = 'medium'
-                if data['mistake_type'] in ['letter_reversal', 'number_reversal']: severity = 'high'
-                elif data['mistake_type'] in ['spelling_error', 'calculation_error']: severity = 'medium'
-                else: severity = 'low'
+                if mistake_type in ['letter_reversal', 'number_reversal']:
+                    severity = 'high'
+                elif mistake_type in ['spelling_error', 'calculation_error']:
+                    severity = 'medium'
+                else:
+                    severity = 'low'
                 
                 MistakePattern.objects.create(
                     response=user_response,
-                    mistake_type=data['mistake_type'],
+                    mistake_type=mistake_type,
                     severity=severity
                 )
         
-        return Response({'status': 'success', 'response_id': user_response.response_id}, status=status.HTTP_201_CREATED)
+        return Response(
+            {'status': 'success', 'response_id': user_response.response_id},
+            status=status.HTTP_201_CREATED
+        )
 
 
 class EndSessionView(APIView):
     """
     POST /end-session/
-    End session, compute ML metrics locally, and get prediction from .pkl
+    
+    End session, compute features, and get ML prediction.
+    
+    Request:
+        {"user_id": 101, "session_id": "S_101_01"}
+    
+    Response:
+        {
+            "risk": "dyslexia-risk",
+            "confidence_level": "moderate",
+            "key_insights": [
+                "Frequent letter reversals observed",
+                "Reading speed slower than age norm"
+            ]
+        }
     """
+    
     def post(self, request):
         serializer = EndSessionRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
+        user_id = data['user_id']
         session_id = data['session_id']
+        user_confidence = data.get('confidence_level')
+        
+        # Validate user and session
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         try:
             session = Session.objects.get(session_id=session_id)
-            user = session.user
         except Session.DoesNotExist:
-            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        # 1. Fetch Responses
-        responses = UserResponse.objects.filter(session=session)
-        mistakes = MistakePattern.objects.filter(response__session=session)
-
-        # 2. Compute Features for ML Model (risk_classifier.pkl)
-        # Features needed: reading_acc, math_acc, focus_acc, avg_time_ms, rev_rate, pv_rate, impulse_rate
+            return Response(
+                {'error': 'Session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
-        def calc_acc(domain):
-            qs = responses.filter(domain=domain)
-            if not qs.exists(): return 0.0
-            return qs.filter(correct=True).count() / qs.count()
-
-        reading_acc = calc_acc('reading')
-        math_acc = calc_acc('math')
-        focus_acc = calc_acc('attention') # Mapped from 'attention' in DB to 'focus_acc'
+        # Fetch all responses for this session
+        responses = UserResponse.objects.filter(
+            session=session
+        ).select_related('question')
         
-        avg_time = responses.aggregate(models.Avg('response_time_ms'))['response_time_ms__avg'] or 0
+        # Convert to list of dictionaries for ML processing
+        response_data = []
+        for response in responses:
+            # Get mistake types for this response
+            mistakes = MistakePattern.objects.filter(response=response)
+            mistake_type = mistakes.first().mistake_type if mistakes.exists() else None
+            
+            response_data.append({
+                'question_id': response.question_id,
+                'domain': response.domain,
+                'difficulty': response.difficulty,
+                'correct': response.correct,
+                'response_time_ms': response.response_time_ms,
+                'confidence': response.confidence,
+                'mistake_type': mistake_type
+            })
         
-        total_incorrect = responses.filter(correct=False).count()
-        rev_count = mistakes.filter(mistake_type__in=['letter_reversal', 'number_reversal']).count()
-        pv_count = mistakes.filter(mistake_type='place_value_error').count() # Assuming this type exists
+        # Get ML prediction
+        prediction_result = get_prediction(response_data)
         
-        rev_rate = rev_count / total_incorrect if total_incorrect > 0 else 0.0
-        pv_rate = pv_count / total_incorrect if total_incorrect > 0 else 0.0
-        
-        # Impulse rate: answers < 1000ms that were wrong
-        impulse_count = responses.filter(response_time_ms__lt=1000, correct=False).count()
-        impulse_rate = impulse_count / responses.count() if responses.exists() else 0.0
-
-        # 3. Load Model and Predict
-        risk_label = "Assessment Inconclusive"
-        scores = {'dyslexia': 0.0, 'dyscalculia': 0.0, 'attention': 0.0}
-        
-        model = get_risk_model()
-        if model:
-            try:
-                # Prepare DataFrame columns must match training exactly
-                features = pd.DataFrame([{
-                    "reading_acc": reading_acc,
-                    "math_acc": math_acc,
-                    "focus_acc": focus_acc,
-                    "avg_time_ms": avg_time,
-                    "rev_rate": rev_rate,
-                    "pv_rate": pv_rate,
-                    "impulse_rate": impulse_rate
-                }])
-                
-                risk_label = model.predict(features)[0]
-                # If model supports probabilities, get them. Otherwise mock based on label.
-                try:
-                    probs = model.predict_proba(features)[0]
-                    # Assuming classes order: [Attention, Dyscalculia, Dyslexia, Low Risk] - verify with training!
-                    # For safety, just setting the predicted one high
-                    if 'Dyslexia' in risk_label: scores['dyslexia'] = 0.85
-                    elif 'Dyscalculia' in risk_label: scores['dyscalculia'] = 0.85
-                    elif 'Attention' in risk_label: scores['attention'] = 0.85
-                except:
-                    pass
-            except Exception as e:
-                print(f"Prediction Error: {e}")
-
-        # 4. Save Prediction
         with transaction.atomic():
+            # Mark session as completed
             session.completed = True
             session.save()
             
+            # Store prediction
             FinalPrediction.objects.create(
                 session=session,
                 user=user,
-                dyslexia_risk_score=scores['dyslexia'],
-                dyscalculia_risk_score=scores['dyscalculia'],
-                attention_risk_score=scores['attention'],
-                final_label=risk_label,
-                key_insights=[f"Detected {risk_label}", f"Reading Accuracy: {int(reading_acc*100)}%"],
-                confidence_level="High"
+                dyslexia_risk_score=prediction_result['scores']['dyslexia'],
+                dyscalculia_risk_score=prediction_result['scores']['dyscalculia'],
+                attention_risk_score=prediction_result['scores']['attention'],
+                final_label=prediction_result['risk'],
+                key_insights=prediction_result['key_insights'],
+                confidence_level=user_confidence if user_confidence else prediction_result['confidence_level']
             )
-
+        
+        # Return response to frontend
         return Response({
-            'risk': risk_label,
-            'confidence_level': "High",
-            'key_insights': [f"Identified {risk_label} pattern based on performance metrics."]
+            'risk': prediction_result['risk'],
+            'confidence_level': prediction_result['confidence_level'],
+            'key_insights': prediction_result['key_insights']
         }, status=status.HTTP_200_OK)
 
 
 class GetDashboardDataView(APIView):
     """
     POST /get-dashboard-data/
-    Get dashboard data AND Gemini AI summary.
+    
+    Get comprehensive dashboard data for a completed session.
+    
+    Request:
+        {"user_id": 101, "session_id": "S_101_01"}
+    
+    Response:
+        {
+            "student_id": "STU-101",
+            "age_group": "9-11",
+            "final_risk": "Possible Dyslexia-related Risk",
+            "confidence": "Moderate",
+            "risk_level": 60,
+            "assessment_date": "January 16, 2026",
+            "summary": "Assessment completed. Review domain analysis for insights.",
+            "key_insights": ["Frequent letter reversals observed"],
+            "patterns": {
+                "reading": {
+                    "accuracy": 65.5,
+                    "avg_time": 1200.5,
+                    "common_mistake": "Letter Reversal (b/d)",
+                    "recommendation": "Use phonics-based games..."
+                },
+                "math": {...},
+                "focus": {...}
+            }
+        }
     """
+    
     def post(self, request):
         serializer = GetDashboardDataRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
+        user_id = data['user_id']
         session_id = data['session_id']
+        
+        # Validate user and session
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         try:
             session = Session.objects.get(session_id=session_id)
-            user = session.user
-            prediction = FinalPrediction.objects.filter(session=session).first()
         except Session.DoesNotExist:
-            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        # 1. Calculate Standard Patterns
-        responses = UserResponse.objects.filter(session=session)
-        if not responses.exists():
-             return Response({'error': 'No data'}, status=404)
-             
-        domain_patterns = self._calculate_domain_patterns(responses)
-
-        # 2. GENERATE GEMINI AI SUMMARY
-        # Create a text representation of the session for the LLM
-        history_text = ""
-        for r in responses[:20]: # Limit to first 20 for token limits
-            status = "Correct" if r.correct else "Wrong"
-            mistake = r.mistakes.first().mistake_type if r.mistakes.exists() else ""
-            history_text += f"Domain: {r.domain}, Result: {status}, Time: {r.response_time_ms}ms, Mistake: {mistake}\n"
-
-        ai_data = generate_gemini_report(history_text, user.user_id)
+            return Response(
+                {'error': 'Session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
-        # 3. Construct Final Response
-        final_risk = prediction.final_label if prediction else "Pending"
+        # Get prediction if session is completed
+        prediction = None
+        if session.completed:
+            try:
+                prediction = FinalPrediction.objects.get(session=session)
+            except FinalPrediction.DoesNotExist:
+                pass
+        
+        # Fetch all responses for this session
+        responses = UserResponse.objects.filter(session=session).select_related('question')
+        
+        if not responses.exists():
+            return Response(
+                {'error': 'No responses found for this session'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate domain-specific metrics
+        domain_patterns = self._calculate_domain_patterns(responses)
+        
+        # Map risk type to display name
+        risk_labels = {
+            'low-risk': 'Low Risk - No Significant Concerns',
+            'dyslexia-risk': 'Possible Dyslexia-related Risk',
+            'dyscalculia-risk': 'Possible Dyscalculia-related Risk',
+            'attention-risk': 'Possible Attention-related Risk'
+        }
+        
+        # Calculate risk percentage from confidence level
+        risk_levels = {
+            'low': 30,
+            'moderate': 60,
+            'high': 85
+        }
+        
+        # Prepare response data
+        if prediction:
+            final_risk = risk_labels.get(prediction.final_label, prediction.final_label)
+            confidence = prediction.confidence_level.capitalize()
+            risk_level = risk_levels.get(prediction.confidence_level, 50)
+            key_insights = prediction.key_insights
+        else:
+            final_risk = "Assessment In Progress"
+            confidence = "N/A"
+            risk_level = 0
+            key_insights = []
+        
+        # Format assessment date
+        from datetime import datetime
+        assessment_date = session.started_at.strftime('%B %d, %Y')
         
         response_data = {
             'student_id': f'STU-{user.user_id}',
             'age_group': user.age_group,
             'final_risk': final_risk,
-            'confidence': prediction.confidence_level if prediction else "N/A",
-            'risk_level': 85 if "Risk" in final_risk else 20,
-            'assessment_date': session.started_at.strftime('%B %d, %Y'),
-            
-            # Use AI Summary if available, else fallback
-            'summary': ai_data.get('overall_performance', 'Assessment completed. See details below.'),
-            'key_insights': ai_data.get('specific_issues', []),
-            'ai_strengths': ai_data.get('strengths', []),
-            'ai_recommendation': ai_data.get('recommended_focus', ''),
-            
+            'confidence': confidence,
+            'risk_level': risk_level,
+            'assessment_date': assessment_date,
+            'summary': ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.',
+            'key_insights': key_insights,
             'patterns': domain_patterns
         }
         
         return Response(response_data, status=status.HTTP_200_OK)
-
+    
     def _calculate_domain_patterns(self, responses):
-        """Helper to calculate per-domain stats"""
+        """Calculate performance patterns for each domain."""
+        from collections import defaultdict
+        
+        # Group responses by domain
+        domain_data = defaultdict(list)
+        for response in responses:
+            # Map 'writing' and 'attention' to frontend domains
+            domain = response.domain
+            if domain == 'writing':
+                domain = 'reading'  # Combine writing with reading
+            elif domain == 'attention':
+                domain = 'focus'  # Map attention to focus
+            
+            domain_data[domain].append(response)
+        
         patterns = {}
-        for domain in ['reading', 'math', 'attention']: # Map attention to focus for frontend
-            d_res = responses.filter(domain=domain)
-            count = d_res.count()
-            if count == 0:
-                patterns['focus' if domain == 'attention' else domain] = {'accuracy': 0, 'avg_time': 0, 'common_mistake': 'None'}
+        
+        # Calculate metrics for each domain
+        for domain in ['reading', 'math', 'focus']:
+            domain_responses = domain_data.get(domain, [])
+            
+            if not domain_responses:
+                # Default values if no data
+                patterns[domain] = {
+                    'accuracy': 0,
+                    'avg_time': 0,
+                    'common_mistake': 'No data',
+                    'recommendation': 'Complete more questions in this domain for analysis.'
+                }
                 continue
             
-            acc = (d_res.filter(correct=True).count() / count) * 100
-            avg_time = d_res.aggregate(models.Avg('response_time_ms'))['response_time_ms__avg']
+            # Calculate accuracy
+            correct_count = sum(1 for r in domain_responses if r.correct)
+            accuracy = (correct_count / len(domain_responses)) * 100 if domain_responses else 0
             
-            # Common mistake
-            mistakes = MistakePattern.objects.filter(response__in=d_res)
-            common = "None"
-            if mistakes.exists():
-                from django.db.models import Count
-                common = mistakes.values('mistake_type').annotate(c=Count('mistake_type')).order_by('-c').first()['mistake_type']
+            # Calculate average response time
+            avg_time = sum(r.response_time_ms for r in domain_responses) / len(domain_responses)
             
-            patterns['focus' if domain == 'attention' else domain] = {
-                'accuracy': round(acc, 1),
+            # Find most common mistake
+            mistakes = []
+            for response in domain_responses:
+                if not response.correct:
+                    mistake_patterns = MistakePattern.objects.filter(response=response)
+                    for mistake in mistake_patterns:
+                        mistakes.append(mistake.mistake_type)
+            
+            common_mistake = self._get_common_mistake(mistakes, domain)
+            recommendation = self._get_recommendation(domain, accuracy, avg_time, common_mistake)
+            
+            patterns[domain] = {
+                'accuracy': round(accuracy, 1),
                 'avg_time': round(avg_time, 1),
-                'common_mistake': common
+                'common_mistake': common_mistake,
+                'recommendation': recommendation
             }
+        
         return patterns
+    
+    def _get_common_mistake(self, mistakes, domain):
+        """Determine the most common mistake type."""
+        if not mistakes:
+            return "None"
+        
+        from collections import Counter
+        mistake_counts = Counter(mistakes)
+        most_common = mistake_counts.most_common(1)[0][0]
+        
+        # Map mistake types to readable names
+        mistake_names = {
+            'letter_reversal': 'Letter Reversal (b/d, p/q)',
+            'number_reversal': 'Number Reversal',
+            'spelling_error': 'Spelling Errors',
+            'calculation_error': 'Calculation Errors',
+            'sequence_error': 'Sequence Errors',
+            'omission': 'Omissions',
+            'substitution': 'Substitutions'
+        }
+        
+        return mistake_names.get(most_common, most_common.replace('_', ' ').title())
+    
+    def _get_recommendation(self, domain, accuracy, avg_time, common_mistake):
+        """Generate personalized recommendation based on performance."""
+        
+        if domain == 'reading':
+            if accuracy < 60:
+                return "Use highlighted letters, phonics-based games, and short reading chunks. Consider multisensory learning approaches."
+            elif accuracy < 75:
+                return "Continue with phonics practice. Gradually increase reading complexity with guided support."
+            else:
+                return "Reading skills are developing well. Encourage independent reading with age-appropriate materials."
+        
+        elif domain == 'math':
+            if accuracy < 60:
+                return "Use visual aids, manipulatives, and step-by-step problem solving. Break down complex problems into smaller steps."
+            elif accuracy < 75:
+                return "Practice with concrete examples and visual representations. Reinforce foundational concepts."
+            else:
+                return "Math skills are age-appropriate. Introduce more challenging problems to maintain engagement."
+        
+        elif domain == 'focus':
+            if accuracy < 60 or avg_time < 800:
+                return "Short tasks with clear visual cues and structured breaks are helpful. Minimize distractions during work time."
+            elif accuracy < 75:
+                return "Use timers and checklists to improve task completion. Provide positive reinforcement for sustained attention."
+            else:
+                return "Attention span is within normal range. Continue with current strategies and gradually increase task duration."
+        
+        return "Continue current learning approach and monitor progress."
+
 
 class GetUserHistoryView(APIView):
-    """POST /get-user-history/"""
+    """
+    POST /get-user-history/
+    
+    Get assessment history for a user to track improvement.
+    
+    Request:
+        {"user_id": 101}
+        
+    Response:
+        [
+            {
+                "date": "2024-01-15",
+                "dyslexia_score": 0.45,
+                "dyscalculia_score": 0.20,
+                "attention_score": 0.30,
+                "risk_label": "moderate"
+            },
+            ...
+        ]
+    """
+    
     def post(self, request):
+        from .serializers import GetUserHistoryRequestSerializer
         serializer = GetUserHistoryRequestSerializer(data=request.data)
+        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         user_id = serializer.validated_data['user_id']
-        preds = FinalPrediction.objects.filter(user__user_id=user_id).order_by('predicted_at')
         
-        data = [{
-            'date': p.predicted_at.strftime('%Y-%m-%d'),
-            'risk_label': p.final_label,
-            'dyslexia_score': p.dyslexia_risk_score
-        } for p in preds]
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # Get all completed sessions with predictions
+        predictions = FinalPrediction.objects.filter(
+            user=user
+        ).select_related('session').order_by('predicted_at')
         
-        return Response(data, status=200)
+        history_data = []
+        for pred in predictions:
+            history_data.append({
+                'date': pred.predicted_at.strftime('%Y-%m-%d'),
+                'dyslexia_score': pred.dyslexia_risk_score,
+                'dyscalculia_score': pred.dyscalculia_risk_score,
+                'attention_score': pred.attention_risk_score,
+                'risk_label': pred.final_label
+            })
+            
+        return Response(history_data, status=status.HTTP_200_OK)
