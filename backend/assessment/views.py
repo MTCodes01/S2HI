@@ -277,7 +277,9 @@ class GetNextQuestionView(APIView):
                     'difficulty': question_data['difficulty'],
                     'question_text': question_data['question_text'],
                     'options': question_data['options'],
-                    'correct_option': question_data['correct_option']  # Include for answer validation
+                    'correct_option': question_data['correct_option'],  # Include for answer validation
+                    'game_type': question_data.get('game_type'),  # NEW: Game component to use
+                    'game_data': question_data.get('game_data')  # NEW: Game-specific parameters
                 }
                 
                 return Response(response_data, status=status.HTTP_200_OK)
@@ -373,7 +375,9 @@ class SubmitAnswerView(APIView):
                 difficulty=data['difficulty'],
                 question_text='Test question',
                 options=['a', 'b', 'c', 'd'],
-                correct_option='a'
+                correct_option='a',
+                game_type=data.get('game_type'),  # NEW: Store game type
+                game_data=data.get('game_data')  # NEW: Store game-specific data
             )
         
         with transaction.atomic():
@@ -386,7 +390,8 @@ class SubmitAnswerView(APIView):
                 difficulty=data['difficulty'],
                 correct=data['correct'],
                 response_time_ms=data['response_time_ms'],
-                confidence=data.get('confidence')
+                confidence=data.get('confidence'),
+                game_metrics=data.get('game_metrics')  # NEW: Store game-specific metrics
             )
             
             # Create mistake pattern if provided and answer is incorrect
@@ -443,6 +448,7 @@ class EndSessionView(APIView):
         user_id = data['user_id']
         session_id = data['session_id']
         user_confidence = data.get('confidence_level')
+        reading_results = data.get('reading_results')  # NEW: Extract reading analysis data
         
         # Validate user and session
         try:
@@ -483,8 +489,8 @@ class EndSessionView(APIView):
                 'mistake_type': mistake_type
             })
         
-        # Get ML prediction
-        prediction_result = get_prediction(response_data)
+        # Get ML prediction with reading results
+        prediction_result = get_prediction(response_data, reading_results)
         
         with transaction.atomic():
             # Mark session as completed

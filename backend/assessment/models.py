@@ -52,6 +52,8 @@ class Question(models.Model):
     question_text = models.TextField()
     options = models.JSONField()  # List of options
     correct_option = models.CharField(max_length=255)
+    game_type = models.CharField(max_length=50, null=True, blank=True)  # e.g., 'WordChainBuilder', 'TimeEstimator'
+    game_data = models.JSONField(null=True, blank=True)  # Game-specific parameters (scrambled letters, target time, etc.)
 
     class Meta:
         db_table = 'questions'
@@ -77,6 +79,7 @@ class UserResponse(models.Model):
     correct = models.BooleanField()
     response_time_ms = models.IntegerField()
     confidence = models.CharField(max_length=20, choices=CONFIDENCE_CHOICES, null=True, blank=True)
+    game_metrics = models.JSONField(null=True, blank=True)  # Additional game metrics (moves, accuracy, etc.)
     answered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

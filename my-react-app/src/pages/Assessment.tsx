@@ -157,21 +157,42 @@ const Assessment: React.FC = () => {
             if (confidenceScore < 35) confLevel = "low";
             else if (confidenceScore > 75) confLevel = "high";
 
-            const sessionResults = await endSession(userId, sessionId, confLevel);
-
-            setResults({ ...sessionResults, confidence_level: confLevel });
-            // Move to reading assessment phase
+            // Don't end session yet - move to reading assessment first
+            // The session will be ended after reading with reading results included
             setPhase('reading');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to finalize session');
+            setError(err instanceof Error ? err.message : 'Failed to move to reading phase');
             setPhase('error');
         }
     };
 
     // Handle completion of reading aloud assessment
-    const handleReadingComplete = (audioResults: AudioAnalysisResult | null) => {
+    const handleReadingComplete = async (audioResults: AudioAnalysisResult | null) => {
+        if (!userId || !sessionId) return;
+        
         setReadingResults(audioResults);
-        setPhase('complete');
+        setPhase('loading');
+        
+        try {
+            // Map confidence score to type
+            let confLevel: "low" | "moderate" | "high" = "moderate";
+            if (confidenceScore < 35) confLevel = "low";
+            else if (confidenceScore > 75) confLevel = "high";
+            
+            // End session with reading results included
+            const sessionResults = await endSession(
+                userId, 
+                sessionId, 
+                confLevel,
+                audioResults  // Pass reading results to backend
+            );
+            
+            setResults({ ...sessionResults, confidence_level: confLevel });
+            setPhase('complete');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to finalize session with reading results');
+            setPhase('error');
+        }
     };
 
     // Restart assessment
@@ -247,28 +268,34 @@ const Assessment: React.FC = () => {
     const renderGameComponent = () => {
         if (!currentQuestion) return null;
 
-        const { domain, difficulty, question_text, options } = currentQuestion;
+        const { domain, difficulty, question_text, options, game_data } = currentQuestion;
+        
+        // Use backend game_data if available, otherwise fall back to defaults
 
         // --- ATTENTION GAMES ---
         if (domain === 'attention') {
             if (difficulty === 'easy') {
                 return (
                     <FocusGuard
-                        stimulus={Math.random() > 0.3 ? "green" : "red"}
+                        stimulus={game_data?.stimulus || (Math.random() > 0.3 ? "green" : "red")}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
                 );
             } else if (difficulty === 'medium') {
+                // Use backend-generated game data for TaskSwitchSprint
+                const items = game_data?.items || [
+                    { shape: 'circle', color: 'blue' },
+                    { shape: 'square', color: 'orange' },
+                    { shape: 'circle', color: 'orange' },
+                    { shape: 'square', color: 'blue' }
+                ];
+                const initialRule = game_data?.initialRule || 'COLOR';
+               
                 return (
                     <TaskSwitchSprint
-                        initialRule="COLOR"
-                        items={[
-                            { shape: 'circle', color: 'blue' },
-                            { shape: 'square', color: 'orange' },
-                            { shape: 'circle', color: 'orange' },
-                            { shape: 'square', color: 'blue' }
-                        ]}
+                        initialRule={initialRule as 'COLOR' | 'SHAPE'}
+                        items={items}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -276,9 +303,9 @@ const Assessment: React.FC = () => {
             } else {
                 return (
                     <PatternWatcher
-                        expectedPattern={["A", "B", "A", "B"]}
-                        currentItem={Math.random() > 0.2 ? "A" : "C"}
-                        isBreak={false}
+                        expectedPattern={game_data?.expectedPattern || ["A", "B", "A", "B"]}
+                        currentItem={game_data?.currentItem || (Math.random() > 0.2 ? "A" : "C")}
+                        isBreak={game_data?.isBreak || false}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -291,8 +318,8 @@ const Assessment: React.FC = () => {
             if (difficulty === 'easy') {
                 return (
                     <NumberSenseDash
-                        left={Math.floor(Math.random() * 20)}
-                        right={Math.floor(Math.random() * 20)}
+                        left={game_data?.left || Math.floor(Math.random() * 20)}
+                        right={game_data?.right || Math.floor(Math.random() * 20)}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -300,7 +327,7 @@ const Assessment: React.FC = () => {
             } else if (difficulty === 'medium') {
                 return (
                     <TimeEstimator
-                        targetSeconds={5}
+                        targetSeconds={game_data?.targetSeconds || 5}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -308,9 +335,9 @@ const Assessment: React.FC = () => {
             } else {
                 return (
                     <VisualMathMatch
-                        equation={question_text}
-                        correctValue={5}
-                        options={[4, 5, 6]}
+                        equation={game_data?.equation || question_text}
+                        correctValue={game_data?.correctValue || 5}
+                        options={game_data?.options || [4, 5, 6]}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -330,8 +357,9 @@ const Assessment: React.FC = () => {
                     />
                 );
             } else if (difficulty === 'medium') {
-                const target = currentQuestion.correct_option || "READ";
-                const shuffled = target.toUpperCase().split('').sort(() => Math.random() - 0.5);
+                // Use backend-generated scrambled letters
+                const target = game_data?.targetWord || currentQuestion.correct_option || "READ";
+                const shuffled = game_data?.scrambledLetters || target.toUpperCase().split('').sort(() => Math.random() - 0.5);
                 return (
                     <WordChainBuilder
                         targetWord={target}
@@ -355,7 +383,7 @@ const Assessment: React.FC = () => {
         if (domain === 'writing' || domain === 'logic') {
             return (
                 <PlanAheadPuzzle
-                    level={1}
+                    level={game_data?.level || 1}
                     onAnswer={handleGameAnswer}
                     ageGroup={ageGroup}
                 />
