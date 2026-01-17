@@ -21,7 +21,7 @@
 
 .puzzle-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(var(--grid-width, 3), 1fr);
     gap: 8px;
     background: #e2e8f0;
     padding: 8px;
