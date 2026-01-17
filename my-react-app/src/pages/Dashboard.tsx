@@ -26,9 +26,27 @@ const Dashboard: React.FC = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loadingHistorySession, setLoadingHistorySession] = useState<string | null>(null);
 
     // Check if we have session info to fetch real data
     const hasSessionInfo = state?.userId && state?.sessionId;
+
+    // Function to load a specific session's dashboard data
+    const loadHistoricalReport = async (sessionId: string, userId: number) => {
+        setLoadingHistorySession(sessionId);
+        setError(null);
+
+        try {
+            const data = await getDashboardData(userId, sessionId);
+            setDashboardData(data);
+            setShowHistory(false); // Close modal after loading
+        } catch (err) {
+            console.error('Failed to load historical report:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load historical report');
+        } finally {
+            setLoadingHistorySession(null);
+        }
+    };
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -67,6 +85,7 @@ const Dashboard: React.FC = () => {
                 assessmentDate: dashboardData.assessment_date,
                 summary: dashboardData.summary,
                 keyInsights: dashboardData.key_insights,
+                nextSteps: dashboardData.next_steps || [],
                 patterns: {
                     reading: {
                         accuracy: dashboardData.patterns.reading.accuracy,
@@ -100,6 +119,7 @@ const Dashboard: React.FC = () => {
             assessmentDate: "No assessment completed",
             summary: "This is a demo view. Complete an assessment to see real results.",
             keyInsights: [],
+            nextSteps: [],
             patterns: {
                 reading: {
                     accuracy: 72,
@@ -223,6 +243,12 @@ const Dashboard: React.FC = () => {
             ];
         }
 
+        // Use AI-generated next steps if available
+        if (studentData.nextSteps && studentData.nextSteps.length > 0) {
+            return studentData.nextSteps.map((step: string) => ({ text: step }));
+        }
+
+        // Fallback if no AI steps
         return [
             { text: 'Schedule follow-up with learning specialist' },
             { text: 'Implement recommended intervention strategies' },
@@ -397,8 +423,13 @@ const Dashboard: React.FC = () => {
                                                 {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
                                             </span>
                                         </div>
-                                        <button className="btn btn-sm btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
-                                            View Report
+                                        <button 
+                                            className="btn btn-sm btn-secondary" 
+                                            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                                            onClick={() => loadHistoricalReport(session.session_id, state?.userId || 0)}
+                                            disabled={loadingHistorySession === session.session_id}
+                                        >
+                                            {loadingHistorySession === session.session_id ? 'Loading...' : 'View Report'}
                                         </button>
                                     </div>
                                 ))}
@@ -564,33 +595,14 @@ const Dashboard: React.FC = () => {
                                 </div>
                             </div>
                             <ImprovementGraph
-    data={historyData
-        // 1. Create a safe copy and sort by date
-        .slice()
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .map((item, index) => {
-            // 2. Format with a counter to FORCE separation
-            // Instead of just a date, we make the string totally unique
-            // e.g., "Jan 17 (1)", "Jan 17 (2)", "Jan 17 (3)"
-            const dateObj = new Date(item.date);
-            const shortDate = dateObj.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric'
-            });
-
-            return {
-                ...item,
-                // We append the index. This forces the graph to see them as different points.
-                date: `${shortDate} (${index + 1})`,
-
-                // Invert scores
-                dyslexia_score: 1.0 - item.dyslexia_score,
-                dyscalculia_score: 1.0 - item.dyscalculia_score,
-                attention_score: 1.0 - item.attention_score
-            };
-        })}
-
-/>
+                                data={historyData.map(item => ({
+                                    ...item,
+                                    // Invert risk to show proficiency/capability (1 - risk)
+                                    dyslexia_score: 1.0 - item.dyslexia_score,
+                                    dyscalculia_score: 1.0 - item.dyscalculia_score,
+                                    attention_score: 1.0 - item.attention_score
+                                }))}
+                            />
                         </div>
                     )}
                 </main>

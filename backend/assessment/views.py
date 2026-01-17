@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
 
-from .models import User, Session, Question, UserResponse, MistakePattern, FinalPrediction
+from .models import User, Session, Question, UserResponse, MistakePattern, FinalPrediction, DashboardCache
 from .serializers import (
     StartSessionRequestSerializer,
     StartSessionResponseSerializer,
@@ -640,30 +640,72 @@ class GetDashboardDataView(APIView):
                 'attention_score': 0
             }
         
-        # 🤖 Use Gemini AI to generate personalized insights and recommendations
-        total_questions = responses.count()
-        gemini_insights = generate_dashboard_insights(
-            age_group=user.age_group,
-            domain_patterns=domain_patterns,
-            prediction_data=prediction_data,
-            total_questions=total_questions
-        )
-        
-        # Use Gemini-generated content if available, otherwise use fallback
-        if gemini_insights:
-            summary = gemini_insights['summary']
-            ai_key_insights = gemini_insights['key_insights']
+        # 💾 Check if dashboard data is already cached
+        try:
+            cache = DashboardCache.objects.get(session=session)
+            print(f"✅ Loading dashboard data from cache for session {session_id}")
             
-            # Update domain patterns with AI recommendations
-            domain_patterns['reading']['recommendation'] = gemini_insights['reading_recommendation']
-            domain_patterns['math']['recommendation'] = gemini_insights['math_recommendation']
-            domain_patterns['focus']['recommendation'] = gemini_insights['focus_recommendation']
-        else:
-            # Fallback to basic summary if Gemini fails
-            print("⚠️ Gemini failed, using fallback logic for recommendations")
-            summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
-            ai_key_insights = key_insights
-            # Recommendations are already set by _calculate_domain_patterns fallback
+            # Use cached Gemini-generated content
+            summary = cache.summary
+            ai_key_insights = cache.key_insights
+            ai_next_steps = cache.next_steps
+            
+            # Update domain patterns with cached recommendations
+            domain_patterns['reading']['recommendation'] = cache.reading_recommendation
+            domain_patterns['math']['recommendation'] = cache.math_recommendation
+            domain_patterns['focus']['recommendation'] = cache.focus_recommendation
+            
+        except DashboardCache.DoesNotExist:
+            print(f"🤖 No cache found. Generating new dashboard insights with Gemini...")
+            
+            # Generate new insights with Gemini AI
+            total_questions = responses.count()
+            gemini_insights = generate_dashboard_insights(
+                age_group=user.age_group,
+                domain_patterns=domain_patterns,
+                prediction_data=prediction_data,
+                total_questions=total_questions
+            )
+            
+            # Use Gemini-generated content if available, otherwise use fallback
+            if gemini_insights:
+                summary = gemini_insights['summary']
+                ai_key_insights = gemini_insights['key_insights']
+                ai_next_steps = gemini_insights.get('next_steps', [])
+                
+                # Update domain patterns with AI recommendations
+                reading_rec = gemini_insights['reading_recommendation']
+                math_rec = gemini_insights['math_recommendation']
+                focus_rec = gemini_insights['focus_recommendation']
+                
+                domain_patterns['reading']['recommendation'] = reading_rec
+                domain_patterns['math']['recommendation'] = math_rec
+                domain_patterns['focus']['recommendation'] = focus_rec
+                
+                # 💾 Save to cache for future requests
+                try:
+                    DashboardCache.objects.create(
+                        session=session,
+                        user=user,
+                        summary=summary,
+                        key_insights=ai_key_insights,
+                        next_steps=ai_next_steps,
+                        reading_recommendation=reading_rec,
+                        math_recommendation=math_rec,
+                        focus_recommendation=focus_rec
+                    )
+                    print(f"✅ Dashboard data cached successfully")
+                except Exception as e:
+                    print(f"⚠️ Failed to save cache: {e}")
+                    # Continue anyway, user still gets the data
+                    
+            else:
+                # Fallback to basic summary if Gemini fails
+                print("⚠️ Gemini failed, using fallback logic for recommendations")
+                summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
+                ai_key_insights = key_insights
+                ai_next_steps = []
+                # Recommendations are already set by _calculate_domain_patterns fallback
         
         # Format assessment date
         from datetime import datetime
@@ -678,6 +720,7 @@ class GetDashboardDataView(APIView):
             'assessment_date': assessment_date,
             'summary': summary,
             'key_insights': ai_key_insights,
+            'next_steps': ai_next_steps,
             'patterns': domain_patterns
         }
         

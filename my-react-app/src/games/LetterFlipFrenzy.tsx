@@ -10,18 +10,19 @@ type ReadingResult = {
 type Props = {
     question: string;
     options: string[];
+    correctOption?: string;  // Added to receive correct answer from backend
     onAnswer: (result: ReadingResult) => void;
     ageGroup?: string;
 };
 
-export default function ReadingGame({ question, options, onAnswer, ageGroup = "9-11" }: Props) {
+export default function ReadingGame({ question, options, correctOption, onAnswer, ageGroup = "9-11" }: Props) {
     const startTime = useRef<number>(Date.now());
 
     const handleClick = (option: string) => {
         const responseTime = Date.now() - startTime.current;
 
-        // TEMP correctness check (backend will verify later)
-        const correct = option === options[0];
+        // Use correctOption from backend if available, otherwise fall back to options[0]
+        const correct = correctOption ? (option === correctOption) : (option === options[0]);
 
         let mistakeType;
         if (!correct) mistakeType = "letter_confusion";

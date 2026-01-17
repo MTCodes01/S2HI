@@ -349,6 +349,7 @@ const Assessment: React.FC = () => {
                     <LetterFlipFrenzy
                         question={question_text}
                         options={options}
+                        correctOption={currentQuestion.correct_option}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
