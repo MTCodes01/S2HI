@@ -123,169 +123,148 @@ class GetNextQuestionView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Get next adaptive question using ML model
+        # Get next adaptive question using Gemini AI (with PKL fallback)
         try:
-            import joblib
-            import os
-            import numpy as np
-            from django.conf import settings
+            # 🚀 NEW: Use Gemini AI for adaptive question generation
+            from .gemini_question_service import generate_adaptive_question
             
-            import sys
+            # Get user and session info
+            user = session.user
+            responses = UserResponse.objects.filter(session=session).order_by('-answered_at')
             
-            # Ensure the current directory is in sys.path so the unpickler can find 'question_generator_model'
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            if current_dir not in sys.path:
-                sys.path.append(current_dir)
-
-            # Load question generator model (trained by team)
-            # Check multiple locations and names
-            paths_to_check = [
-                os.path.join(current_dir, 'question_model.pkl'),       # Trained script output
-                os.path.join(settings.BASE_DIR, 'question_generator.pkl'), # Old location
-                os.path.join(settings.BASE_DIR, 'question_model.pkl')
-            ]
+            # Calculate session metrics
+            total_responses = responses.count()
+            correct_count = responses.filter(correct=True).count()
+            session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
             
-            generator_path = None
-            for path in paths_to_check:
-                if os.path.exists(path):
-                    generator_path = path
-                    break
+            # Count questions per domain
+            domain_counts = {
+                'reading': responses.filter(domain='reading').count(),
+                'math': responses.filter(domain='math').count(),
+                'attention': responses.filter(domain='attention').count()
+            }
             
-            if generator_path:
-                generator = joblib.load(generator_path)
-                
-                # Get previous responses to determine current state
-                responses = UserResponse.objects.filter(session=session).order_by('-answered_at')
-                
-                # Calculate session accuracy
-                total_responses = responses.count()
-                correct_count = responses.filter(correct=True).count()
-                session_accuracy = correct_count / total_responses if total_responses > 0 else 1.0
-                
-                # Only 3 domains for assessment: reading, math, attention
-                domain_map = {'reading': 0, 'math': 1, 'attention': 2}
-                
-                if responses.exists():
-                    last_response = responses.first()
-                    
-                    # 1. Last Correct
-                    is_correct = 1 if correct else 0
-                    
-                    # 2. Last Response Time
-                    time_ms = response_time_ms if response_time_ms is not None else 2000
-                    
-                    # 3-5. Difficulty One-Hot
-                    last_diff = last_response.difficulty
-                    d_easy = 1 if last_diff == 'easy' else 0
-                    d_medium = 1 if last_diff == 'medium' else 0
-                    d_hard = 1 if last_diff == 'hard' else 0
-                    
-                    # 6. Session Accuracy (computed above)
-                    
-                    # 7. Current Domain (integer) - map to 0, 1, or 2
-                    cur_domain = domain_map.get(last_response.domain, 0)
-                    
-                else:
-                    # First question defaults
-                    is_correct = 1
-                    time_ms = 0
-                    d_easy = 1
-                    d_medium = 0
-                    d_hard = 0
-                    session_accuracy = 1.0
-                    cur_domain = 0
-                
-                # Prepare features for model: 
-                # [last_correct, last_response_time, diff_easy, diff_medium, diff_hard, session_accuracy, current_domain]
-                features = np.array([[
-                    is_correct, 
-                    time_ms, 
-                    d_easy, 
-                    d_medium, 
-                    d_hard, 
-                    session_accuracy, 
-                    cur_domain
-                ]])
-                
-                # Predict next domain and difficulty
-                prediction = generator.predict(features)
-                
-                # Parse prediction (returns [[domain, difficulty]])
-                if len(prediction.shape) == 2 and prediction.shape[1] == 2:
-                    next_domain_idx = int(prediction[0][0])
-                    next_diff_idx = int(prediction[0][1])
-                else:
-                    # Fallback
-                    next_domain_idx = 0
-                    next_diff_idx = 1
-                
-                # Map indices to names (only 3 domains)
-                domain_names = {0: 'reading', 1: 'math', 2: 'attention'}
-                diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
-                
-                # Apply domain rotation to ensure variety
-                # Count how many times each domain has appeared
-                domain_counts = {
-                    'reading': responses.filter(domain='reading').count(),
-                    'math': responses.filter(domain='math').count(),
-                    'attention': responses.filter(domain='attention').count()
-                }
-                
-                # Get predicted domain
-                predicted_domain = domain_names.get(next_domain_idx, 'reading')
-                
-                # If predicted domain has appeared 3+ times more than another domain, rotate
-                min_count = min(domain_counts.values()) if domain_counts else 0
-                max_count = max(domain_counts.values()) if domain_counts else 0
-                
-                if domain_counts.get(predicted_domain, 0) >= min_count + 3:
-                    # Force rotation to least-used domain
-                    next_domain = min(domain_counts, key=domain_counts.get)
-                    print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
-                else:
-                    next_domain = predicted_domain
-                
-                next_difficulty = diff_names.get(next_diff_idx, 'medium')
-                
-                # Debug logging
-                print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
-                print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
-                
-                # Check if session should end (15-20 questions)
-                response_count = UserResponse.objects.filter(session=session).count()
-                
-                if response_count >= 30:
-                    # End session automatically
-                    return Response(
-                        {
-                            'message': 'Assessment complete! Generating your results...',
-                            'end_session': True,
-                            'total_questions': response_count
-                        },
-                        status=status.HTTP_200_OK
-                    )
-                
-                # 🎯 GENERATE QUESTION DYNAMICALLY using the model
-                question_data = generator.generate_question(next_domain, next_difficulty)
-                
-                # Create a unique question ID
-                question_id = f"Q_{session_id}_{response_count + 1}"
-                
-                response_data = {
-                    'question_id': question_id,
-                    'domain': question_data['domain'],
-                    'difficulty': question_data['difficulty'],
-                    'question_text': question_data['question_text'],
-                    'options': question_data['options'],
-                    'correct_option': question_data['correct_option'],  # Include for answer validation
-                    'game_type': question_data.get('game_type'),  # NEW: Game component to use
-                    'game_data': question_data.get('game_data')  # NEW: Game-specific parameters
-                }
-                
-                return Response(response_data, status=status.HTTP_200_OK)
-                
+            # Get current difficulty from last response
+            if responses.exists():
+                last_response = responses.first()
+                current_difficulty = last_response.difficulty
+                current_domain = last_response.domain
             else:
-                # Fallback to database if generator not found
+                current_difficulty = 'easy'
+                current_domain = 'reading'
+            
+            # Check if session should end (30 questions max)
+            if total_responses >= 30:
+                return Response(
+                    {
+                        'message': 'Assessment complete! Generating your results...',
+                        'end_session': True,
+                        'total_questions': total_responses
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Generate question via Gemini
+            print(f"🤖 Generating question via Gemini AI...")
+            question_data = generate_adaptive_question(
+                age_group=user.age_group,
+                last_correct=correct,
+                response_time_ms=response_time_ms,
+                current_domain=current_domain,
+                current_difficulty=current_difficulty,
+                domain_counts=domain_counts,
+                session_accuracy=session_accuracy
+            )
+            
+            # Create unique question ID
+            question_id = f"Q_{session_id}_{total_responses + 1}"
+            
+            response_data = {
+                'question_id': question_id,
+                'domain': question_data['domain'],
+                'difficulty': question_data['difficulty'],
+                'question_text': question_data['question_text'],
+                'options': question_data['options'],
+                'correct_option': question_data.get('correct_option', question_data['options'][0]),
+                'game_type': question_data.get('game_type'),
+                'game_data': question_data.get('game_data')
+            }
+            
+            print(f"✅ Generated {question_data['domain']}/{question_data['difficulty']} - {question_data.get('game_type')}")
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            # Fallback to PKL model if Gemini fails
+            print(f"⚠️ Gemini failed, using PKL fallback: {e}")
+            
+            try:
+                import joblib
+                import os
+                from django.conf import settings
+                
+                # Load PKL model
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                paths_to_check = [
+                    os.path.join(current_dir, 'question_model.pkl'),
+                    os.path.join(settings.BASE_DIR, 'question_generator.pkl')
+                ]
+                
+                generator_path = None
+                for path in paths_to_check:
+                    if os.path.exists(path):
+                        generator_path = path
+                        break
+                
+                if generator_path:
+                    # Use PKL model as fallback
+                    import joblib
+                    import numpy as np
+                    generator = joblib.load(generator_path)
+                    
+                    # Simplified PKL generation
+                    question_data = generator.generate_question('reading', 'medium')
+                    question_id = f"Q_{session.session_id}_{UserResponse.objects.filter(session=session).count() + 1}"
+                    
+                    return Response({
+                        'question_id': question_id,
+                        'domain': question_data['domain'],
+                        'difficulty': question_data['difficulty'],
+                        'question_text': question_data['question_text'],
+                        'options': question_data['options'],
+                        'correct_option': question_data.get('correct_option'),
+                        'game_type': question_data.get('game_type'),
+                        'game_data': question_data.get('game_data')
+                    }, status=status.HTTP_200_OK)
+                
+                else: # Fallback to database if generator not found
+                    print(f"⚠️ PKL generator not found, using database fallback.")
+                    question = get_adaptive_question(
+                        session_id=session_id,
+                        last_question_id=last_question_id,
+                        correct=correct,
+                        response_time_ms=response_time_ms
+                    )
+                    
+                    if not question:
+                        return Response(
+                            {'message': 'No more questions available', 'end_session': True},
+                            status=status.HTTP_200_OK
+                        )
+                    
+                    response_data = {
+                        'question_id': question.question_id,
+                        'domain': question.domain,
+                        'difficulty': question.difficulty,
+                        'question_text': question.question_text,
+                        'options': question.options
+                    }
+                    
+                    return Response(response_data, status=status.HTTP_200_OK)
+                
+            except Exception as pkl_error:
+                print(f"❌ PKL fallback also failed: {pkl_error}")
+                # Final fallback to database
                 question = get_adaptive_question(
                     session_id=session_id,
                     last_question_id=last_question_id,
