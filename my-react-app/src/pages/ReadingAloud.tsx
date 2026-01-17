@@ -35,7 +35,7 @@ const ReadingAloud: React.FC<ReadingAloudProps> = ({
 
   const loadSentence = async () => {
     try {
-      const sentenceData = await getReadingSentence(userId, sessionId);
+      const sentenceData = await getReadingSentence(userId, sessionId, ageGroup);
       setSentence(sentenceData);
     } catch (err) {
       setError('Failed to load reading sentence. Please try again.');

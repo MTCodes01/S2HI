@@ -6,4 +6,5 @@ from . import views
 
 urlpatterns = [
     path('analyze-reading/', views.AnalyzeReadingView.as_view(), name='analyze-reading'),
+    path('generate-sentence/', views.GenerateReadingSentenceView.as_view(), name='generate-sentence'),
 ]

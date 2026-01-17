@@ -158,15 +158,46 @@ const READING_SENTENCES = [
 
 /**
  * Get a reading sentence for the reading aloud assessment
+ * Now powered by Gemini API for age-appropriate sentence generation
  */
 export async function getReadingSentence(
-  _userId: number,
-  _sessionId: string
+  userId: number,
+  sessionId: string,
+  ageGroup?: string,
+  difficulty?: string
 ): Promise<{ sentence_id: string; text: string; difficulty: string; domain: string }> {
-  // For now, return a random sentence from the local list
-  // In the future, this could be an API call to get personalized sentences
-  const randomIndex = Math.floor(Math.random() * READING_SENTENCES.length);
-  return Promise.resolve(READING_SENTENCES[randomIndex]);
+  try {
+    // Call backend API to generate sentence using Gemini
+    const response = await fetch(`${API_BASE_URL}/reading/generate-sentence/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        session_id: sessionId,
+        age_group: ageGroup || '9-11',
+        difficulty: difficulty
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.status === 'success' && data.sentence) {
+      return data.sentence;
+    }
+    
+    throw new Error('Invalid response from server');
+    
+  } catch (error) {
+    console.error('Failed to generate sentence via backend, using fallback:', error);
+    
+    // Fallback to local sentences if API fails
+    const randomIndex = Math.floor(Math.random() * READING_SENTENCES.length);
+    return READING_SENTENCES[randomIndex];
+  }
 }
 
 /**

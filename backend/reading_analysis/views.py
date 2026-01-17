@@ -84,3 +84,54 @@ class AnalyzeReadingView(APIView):
                 "error": str(e),
                 "status": "error"
             }, status=500)
+
+
+class GenerateReadingSentenceView(APIView):
+    """
+    Generates age-appropriate reading sentences using Gemini API.
+    """
+    
+    def post(self, request, *args, **kwargs):
+        print("📝 Received request to generate reading sentence...")
+        
+        try:
+            # Extract parameters
+            user_id = request.data.get('user_id')
+            session_id = request.data.get('session_id')
+            age_group = request.data.get('age_group', '9-11')
+            difficulty = request.data.get('difficulty')  # optional
+            
+            print(f"📋 Request params: user_id={user_id}, session_id={session_id}, age_group={age_group}, difficulty={difficulty}")
+            
+            # Import the sentence generation service
+            from .services import generate_reading_sentence_with_gemini
+            
+            # Generate sentence using Gemini
+            sentence_data = generate_reading_sentence_with_gemini(age_group, difficulty)
+            
+            print(f"✅ Generated sentence: {sentence_data['text']}")
+            
+            # Return the generated sentence
+            return Response({
+                "status": "success",
+                "sentence": sentence_data
+            })
+            
+        except Exception as e:
+            print(f"❌ Error generating sentence: {e}")
+            print(f"❌ Full traceback:\n{traceback.format_exc()}")
+            
+            # Return fallback sentence on error
+            import random
+            fallback_sentences = [
+                {"sentence_id": "FB001", "text": "The quick brown fox jumps over the lazy dog.", "difficulty": "easy", "domain": "reading"},
+                {"sentence_id": "FB002", "text": "She sells seashells by the seashore.", "difficulty": "medium", "domain": "reading"},
+                {"sentence_id": "FB003", "text": "The butterfly fluttered between the beautiful bright flowers.", "difficulty": "medium", "domain": "reading"},
+            ]
+            
+            return Response({
+                "status": "success",
+                "sentence": random.choice(fallback_sentences),
+                "note": "Using fallback sentence due to generation error"
+            })
+
