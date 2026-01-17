@@ -42,8 +42,8 @@ def determine_next_parameters(last_correct, response_time_ms, current_difficulty
     elif age_group in ['9-11']:
         # Middle age: can handle all levels but prefer medium
         pass  # No restrictions
-    elif age_group in ['11-14', '12-14']:
-        # Older kids: avoid too easy questions
+    elif age_group in ['11-14', '12-14', '14+']:
+        # Older kids and teens: avoid too easy questions, prefer medium-hard
         next_difficulty_idx = max(0, next_difficulty_idx)  # Min easy, but rare
     
     next_difficulty = difficulty_levels[next_difficulty_idx]
@@ -117,6 +117,11 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
             'easy': 'Basic level, numbers up to 100, 5-6 letter words',
             'medium': 'Grade-level challenge, larger numbers, 6-8 letter words',
             'hard': 'Advanced level, complex numbers, 8+ letter words, multi-step reasoning'
+        },
+        '14+': {
+            'easy': 'Standard level, numbers up to 200, 6-7 letter words',
+            'medium': 'Advanced challenge, large numbers, 7-9 letter complex words',
+            'hard': 'Expert level, very large numbers, 9+ letter words, multi-step abstract reasoning'
         }
     }
     
