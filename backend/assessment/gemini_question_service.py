@@ -93,7 +93,31 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
         'PatternWatcher': "No extra data needed, game generates sequence internally. Just provide age-appropriate encouragement in question_text.",
         'FocusGuard': "Set stimulus to 'green' or 'red'.",
         'PlanAheadPuzzle': f"This is a GRID-BASED pathfinding puzzle game. Set level 1-3 based on difficulty and gridSize: 3 for age 6-8, 4 for 9-11, 5 for 12-14, 6 for 14+. The question_text should be simple like 'Reach the Star!' or 'Navigate to the goal!'. This is NOT an essay or written planning task - it's a visual puzzle where users move a ball through a grid.",
-        'LetterFlipFrenzy': "Generate a question about similar looking letters (b/d/p/q).",
+        'LetterFlipFrenzy': f"""Generate a reading comprehension question with exactly 4 word options appropriate for age {age_group}.
+        
+CRITICAL INSTRUCTION - FOLLOW THIS PROCESS EXACTLY:
+1. FIRST: Generate 4 age-appropriate words (use {params['word_len']} letter words)
+2. SECOND: Analyze these words for common properties (letters, positions, patterns)
+3. THIRD: Create a question that AT LEAST ONE word can correctly answer
+4. FOURTH: Set correct_option to the word that answers the question
+
+Valid question patterns (choose ONE that matches your words):
+- "Which word contains the letter 'X' as the second/third/fourth letter?" (verify one word has letter X at that position)
+- "Which word starts with the letter 'X'?" (verify one word starts with X)
+- "Which word ends with the letter 'X'?" (verify one word ends with X)
+- "Which word has exactly N letters?" (verify one word has N letters)
+- "Which word contains the letter 'X'?" (verify one word contains X anywhere)
+
+VALIDATION CHECKLIST before returning:
+✓ Did I generate exactly 4 words?
+✓ Is there at least one word that correctly answers my question?
+✓ Is correct_option set to a word that answers the question?
+✓ Are all words age-appropriate ({params['word_len']} letters for {age_group})?
+
+Example for age 6-8:
+Words: ["edge", "moon", "star", "lake"]
+Question: "Which word contains the letter 'd' as the second letter?"
+Correct: "edge" (e-d-g-e, second letter is 'd')""",
         'ReadAloudEcho': "Generate a 10-15 word sentence appropriate for age."
     }
     
