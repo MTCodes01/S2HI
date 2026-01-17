@@ -48,19 +48,17 @@ def determine_next_parameters(last_correct, response_time_ms, current_difficulty
     
     next_difficulty = difficulty_levels[next_difficulty_idx]
     
-    # Domain rotation - Include writing/logic
+    # Domain rotation - Strictly pick least used
     domains = ['reading', 'math', 'attention', 'writing']
-    min_count = min(domain_counts.values()) if domain_counts else 0
+    counts = [domain_counts.get(d, 0) for d in domains]
+    min_val = min(counts)
     
-    # Prioritize domains with low counts
-    least_used = [d for d in domains if domain_counts.get(d, 0) == min_count]
+    # Get all domains that have the minimum count
+    least_used = [d for d in domains if domain_counts.get(d, 0) == min_val]
     
     import random
-    # 70% chance to pick from least used, 30% total random for variety
-    if random.random() < 0.7:
-        next_domain = random.choice(least_used)
-    else:
-        next_domain = random.choice(domains)
+    # Strictly pick from least used to ensure perfect balance
+    next_domain = random.choice(least_used)
     
     return next_domain, next_difficulty
 
@@ -82,8 +80,8 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
         'WordChainBuilder': "Generate a 4-6 letter word. Return JSON: { 'targetWord': 'WORD', 'scrambledLetters': ['W', 'R', 'O', 'D'] }",
         'TimeEstimator': "Set targetSeconds: Easy=3-5, Medium=5-7, Hard=7-10.",
         'TaskSwitchSprint': "Generate 8-10 items. Each item: { 'shape': 'circle'|'square', 'color': 'blue'|'orange' }. Also set initialRule: 'COLOR'|'SHAPE'.",
-        'NumberSenseDash': "Generate two numbers 'left' and 'right'. Age 6-8: 1-20, Age 9-11: 10-50, Age 12-14: 20-100.",
-        'VisualMathMatch': "Create math equation (e.g. '12 + 15') and options array (numbers) with correctValue.",
+        'NumberSenseDash': "Generate two numbers 'left' and 'right' for magnitude comparison. Age 6-8: 1-20, Age 9-11: 10-50, Age 12-14: 20-100.",
+        'VisualMathMatch': "Create a math equation (e.g. '15 + 7' or '3 x 4') and a list of 4 numeric 'options' with the 'correctValue'.",
         'PatternWatcher': "No extra data needed, game generates sequence internally. Just provide age-appropriate encouragement in question_text.",
         'FocusGuard': "Set stimulus to 'green' or 'red'.",
         'PlanAheadPuzzle': "Set level 1-3 based on difficulty.",
@@ -180,8 +178,9 @@ def generate_fallback_question(domain, difficulty, game_type):
     import random
     
     # More varied fallback questions
-    reading_words = ['CAT', 'DOG', 'SUN', 'MOON', 'TREE', 'BOOK', 'FISH', 'BIRD']
-    math_pairs = [(5, 8), (12, 7), (15, 9), (20, 13), (6, 11), (14, 18)]
+    reading_words = ['CAT', 'DOG', 'SUN', 'MOON', 'TREE', 'BOOK', 'FISH', 'BIRD', 'STAR', 'BLUE']
+    math_pairs = [(5, 8), (12, 7), (15, 9), (20, 13), (6, 11), (14, 18), (25, 15), (33, 44)]
+    math_eqs = [('5 + 8', 13), ('12 - 4', 8), ('3 x 4', 12), ('15 + 10', 25), ('20 / 2', 10)]
     colors = ['green', 'red', 'blue', 'yellow']
     
     if domain == 'reading':
@@ -223,6 +222,23 @@ def generate_fallback_question(domain, difficulty, game_type):
                 'difficulty': difficulty,
                 'game_type': game_type
             }
+        elif game_type == 'VisualMathMatch' or difficulty == 'hard':
+            eq, ans = random.choice(math_eqs)
+            opts = [str(ans), str(ans+2), str(abs(ans-3)), str(ans+5)]
+            random.shuffle(opts)
+            return {
+                'question_text': f'Solve: {eq}',
+                'options': opts,
+                'correct_option': str(ans),
+                'game_data': {
+                    'equation': eq,
+                    'correctValue': ans,
+                    'options': [int(o) for o in opts]
+                },
+                'domain': domain,
+                'difficulty': difficulty,
+                'game_type': 'VisualMathMatch'
+            }
         else:
             left, right = random.choice(math_pairs)
             bigger = str(max(left, right))
@@ -233,7 +249,7 @@ def generate_fallback_question(domain, difficulty, game_type):
                 'game_data': {'left': left, 'right': right},
                 'domain': domain,
                 'difficulty': difficulty,
-                'game_type': game_type
+                'game_type': 'NumberSenseDash'
             }
     
     elif domain == 'attention':
