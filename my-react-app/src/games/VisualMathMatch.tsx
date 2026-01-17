@@ -19,8 +19,7 @@ export default function VisualMathMatch({
     equation,
     correctValue,
     options,
-    onAnswer,
-    ageGroup = "9-11"
+    onAnswer
 }: Props) {
     const startTime = useRef<number>(Date.now());
 
@@ -54,7 +53,11 @@ export default function VisualMathMatch({
                         onClick={() => handleClick(value)}
                         className="visual-math-option"
                     >
-                        <div className="visual-math-block">{"●".repeat(value)}</div>
+                        <div className="visual-math-number">{value}</div>
+                        <div className="visual-math-block">
+                            {"●".repeat(Math.min(value, 20))}
+                            {value > 20 && <span className="more-dots">...</span>}
+                        </div>
                     </button>
                 ))}
             </div>
