@@ -233,39 +233,22 @@ class GetNextQuestionView(APIView):
                 # Use domain_names that was already defined above
                 diff_names = {0: 'easy', 1: 'medium', 2: 'hard'}
 
-                # Apply domain rotation to ensure variety
-                # Count how many times each domain has appeared
-                domain_counts = {
-                    'reading': responses.filter(domain='reading').count(),
-                    'math': responses.filter(domain='math').count(),
-                    'attention': responses.filter(domain='attention').count(),
-                    'writing': responses.filter(domain='writing').count(),
-                    'logic': responses.filter(domain='logic').count()
-                }
-
-                # Get predicted domain
-                predicted_domain = domain_names.get(next_domain_idx, 'reading')
-
-                # If predicted domain has appeared 3+ times more than another domain, rotate
-                min_count = min(domain_counts.values()) if domain_counts else 0
-                max_count = max(domain_counts.values()) if domain_counts else 0
-
-                if domain_counts.get(predicted_domain, 0) >= min_count + 3:
-                    # Force rotation to least-used domain
-                    next_domain = min(domain_counts, key=domain_counts.get)
-                    print(f"🔄 Rotating domain from {predicted_domain} to {next_domain} for balance")
-                else:
-                    next_domain = predicted_domain
-
+                # Apply randomized round-robin domain rotation using session-based seed
+                # Ensures variety while maintaining balance across all 5 domains
+                all_domains = ['reading', 'math', 'attention', 'writing', 'logic']
+                
+                import hashlib
+                session_hash = int(hashlib.md5(session_id.encode()).hexdigest(), 16)
+                
+                response_count = responses.count()
+                rotation_index = (response_count + session_hash) % len(all_domains)
+                next_domain = all_domains[rotation_index]
                 next_difficulty = diff_names.get(next_diff_idx, 'medium')
+                
+                # Debug logging 
+                print(f"🔄 Q#{response_count + 1} for session {session_id}: domain='{next_domain}' (offset {session_hash % 5})")
 
-                # Debug logging
-                print(f"🔍 Model prediction - Domain: {next_domain_idx}({predicted_domain}), Difficulty: {next_diff_idx}({next_difficulty})")
-                print(f"📊 Domain counts: {domain_counts}, Final choice: {next_domain}")
-
-                # Check if session should end (15-20 questions)
-                response_count = UserResponse.objects.filter(session=session).count()
-
+                # Check if session should end (30 questions max)
                 if response_count >= 30:
                     # End session automatically
                     return Response(

@@ -330,11 +330,11 @@ class QuestionGeneratorModel:
     def generate_question(self, domain, difficulty):
         """
         Generate a question for the given domain and difficulty.
-
+        
         Args:
-            domain: 'reading', 'math', or 'attention'
+            domain: 'reading', 'math', 'attention', 'writing', or 'logic'
             difficulty: 'easy', 'medium', or 'hard'
-
+            
         Returns:
             Dictionary with question_text, options, correct_option
         """
@@ -347,6 +347,56 @@ class QuestionGeneratorModel:
         if isinstance(difficulty, (int, np.integer)):
             difficulty = diff_map.get(difficulty, 'medium')
 
+        # --- SPECIALIZED GAME GENERATION ---
+        
+        # 1. FocusGuard (Attention/Easy)
+        if domain == 'attention' and difficulty == 'easy':
+            stimulus = random.choice(['green', 'red'])
+            return {
+                'domain': domain,
+                'difficulty': difficulty,
+                'question_text': f"Tap when you see {stimulus.upper()}",
+                'options': ['green', 'red', 'blue', 'yellow'], # Ensure these exist for focus checking
+                'correct_option': stimulus
+            }
+
+        # 2. TaskSwitchSprint (Attention/Medium)
+        if domain == 'attention' and difficulty == 'medium':
+            rule = random.choice(['COLOR', 'SHAPE'])
+            return {
+                'domain': domain,
+                'difficulty': difficulty,
+                'question_text': f"Rule Switch: Match by {rule}",
+                'options': [rule, 'OTHER'], # Rule must be options[0] for Assessment.tsx
+                'correct_option': rule
+            }
+
+        # 3. TimeEstimator (Math/Medium)
+
+        # 3. WordChainBuilder (Reading/Medium)
+        if domain == 'reading' and difficulty == 'medium':
+            word = random.choice(['CAT', 'DOG', 'FROG', 'BOOK', 'FISH', 'JUMP', 'STAR'])
+            return {
+                'domain': domain,
+                'difficulty': difficulty,
+                'question_text': f"Spell the word: {word}",
+                'options': [word],
+                'correct_option': word
+            }
+
+        # 4. PlanAheadPuzzle (Logic/Writing)
+        if domain in ['logic', 'writing']:
+            level = 1 if difficulty == 'easy' else 2
+            return {
+                'domain': domain,
+                'difficulty': difficulty,
+                'question_text': f"Complete the logic puzzle (Level {level})",
+                'options': ['SOLVED'],
+                'correct_option': 'SOLVED'
+            }
+
+        # --- TEMPLATE-BASED FALLBACK ---
+        
         # Get templates for this domain/difficulty
         templates = self.templates.get(domain, {}).get(difficulty, [])
         if not templates:
