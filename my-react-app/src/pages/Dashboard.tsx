@@ -497,7 +497,10 @@ const Dashboard: React.FC = () => {
 
                                     {/* Accuracy Circle */}
                                     <div className="accuracy-display">
-                                        <div className={`accuracy-circle ${domain}`}>
+                                        <div
+                                            className={`accuracy-circle ${domain}`}
+                                            style={{ '--accuracy': data.accuracy } as React.CSSProperties}
+                                        >
                                             <span className="accuracy-value">{data.accuracy}%</span>
                                             <span className="accuracy-label">Accuracy</span>
                                         </div>
