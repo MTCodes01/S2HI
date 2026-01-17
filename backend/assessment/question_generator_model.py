@@ -280,7 +280,7 @@ class QuestionGeneratorModel:
                     ('Which argument has a logical fallacy?', ['All students study. John studies. Therefore John is a student.', 'All birds fly. Hawks fly. Therefore hawks are birds.', 'All A is B. X is A. Therefore X is B.', 'All ice is cold. This is cold. Therefore this is ice.'], 3),
                     ('If (X+3)² = 25, what is X?', ['2', '-8', '2 or -8', 'Cannot be determined'], 2),
                     ('Complete: 1/2, 1/3, 1/4, 1/5, ?', ['1/6', '1/7', '2/6', '1/8'], 0),
-                    ('Which statement is logically consistent?', ['This statement is false.', ['A is B and A is not B.', 'All are false.', 'All are true.'], 2),
+                    ('Which statement is logically consistent?', ['This statement is false.', 'A is B and A is not B.', 'All are false.', 'All are true.'], 2),
                     ('If 5X + 2 = 27, what is X?', ['4', '5', '6', '7'], 0),
                     ('Complete: 1, 3, 6, 10, 15, ?', ['21', '20', '19', '22'], 0),
                     ('Which is a valid conclusion from: Some A are B. Some B are C.', ['Some A are C.', 'All A are C.', 'No A are C.', 'Cannot be determined.'], 3),
