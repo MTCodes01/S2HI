@@ -26,9 +26,27 @@ const Dashboard: React.FC = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loadingHistorySession, setLoadingHistorySession] = useState<string | null>(null);
 
     // Check if we have session info to fetch real data
     const hasSessionInfo = state?.userId && state?.sessionId;
+
+    // Function to load a specific session's dashboard data
+    const loadHistoricalReport = async (sessionId: string, userId: number) => {
+        setLoadingHistorySession(sessionId);
+        setError(null);
+
+        try {
+            const data = await getDashboardData(userId, sessionId);
+            setDashboardData(data);
+            setShowHistory(false); // Close modal after loading
+        } catch (err) {
+            console.error('Failed to load historical report:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load historical report');
+        } finally {
+            setLoadingHistorySession(null);
+        }
+    };
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -405,8 +423,13 @@ const Dashboard: React.FC = () => {
                                                 {session.datetime ? new Date(session.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (session.time || '12:00 PM')} • Risk: {session.risk_label}
                                             </span>
                                         </div>
-                                        <button className="btn btn-sm btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
-                                            View Report
+                                        <button 
+                                            className="btn btn-sm btn-secondary" 
+                                            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                                            onClick={() => loadHistoricalReport(session.session_id, state?.userId || 0)}
+                                            disabled={loadingHistorySession === session.session_id}
+                                        >
+                                            {loadingHistorySession === session.session_id ? 'Loading...' : 'View Report'}
                                         </button>
                                     </div>
                                 ))}

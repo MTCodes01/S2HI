@@ -127,3 +127,31 @@ class FinalPrediction(models.Model):
 
     def __str__(self):
         return f"Prediction {self.prediction_id}: {self.final_label}"
+
+
+class DashboardCache(models.Model):
+    """Caches Gemini-generated dashboard content to avoid redundant API calls."""
+    cache_id = models.AutoField(primary_key=True)
+    session = models.OneToOneField(Session, on_delete=models.CASCADE, related_name='dashboard_cache')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dashboard_caches')
+    
+    # Gemini-generated content
+    summary = models.TextField()
+    key_insights = models.JSONField(default=list)
+    next_steps = models.JSONField(default=list)
+    reading_recommendation = models.TextField()
+    math_recommendation = models.TextField()
+    focus_recommendation = models.TextField()
+    
+    # Metadata
+    cached_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'dashboard_cache'
+        indexes = [
+            models.Index(fields=['session']),
+            models.Index(fields=['user', 'cached_at']),
+        ]
+    
+    def __str__(self):
+        return f"Dashboard Cache for {self.session.session_id}"
