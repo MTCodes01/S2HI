@@ -9,25 +9,18 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 def analyze_audio_with_gemini(audio_path, expected_text, age_group):
     """
-    Uploads audio to Gemini and requests an age-specific reading assessment.
-    Uses modern API with structured JSON output.
+    Analyzes audio using Gemini API with inline audio data.
+    No file upload needed - sends audio bytes directly.
     """
-    print(f"🚀 Uploading to Gemini... (Context: {age_group})")
+    print(f"🚀 Analyzing audio with Gemini... (Context: {age_group})")
     
     try:
-        # 1. Upload File using modern API
-        print(f"📁 Uploading file: {audio_path}")
-        audio_file = client.files.upload(file=audio_path)
-        print(f"✅ File uploaded. URI: {audio_file.uri}")
-        print(f"📄 File state: {audio_file.state}")
+        # 1. Read audio file as bytes
+        print(f"📁 Reading audio file: {audio_path}")
+        with open(audio_path, 'rb') as f:
+            audio_bytes = f.read()
+        print(f"✅ Read {len(audio_bytes)} bytes")
         
-        # Wait for file to become ACTIVE
-        # Instead of polling with client.files.get() (which causes errors),
-        # just wait a few seconds for processing to complete
-        if audio_file.state != "ACTIVE":
-            print("⏳ Waiting for file to become ACTIVE...")
-            time.sleep(5)  # WebM files need more time to process
-
         # 2. Age-Adaptive Prompt
         prompt = f"""
 Analyze this audio recording of a student reading aloud.
@@ -44,22 +37,23 @@ Analyze the audio for:
 6. Recommended solutions or next steps
 """
 
-        print("🤖 Generating content with structured output...")
+        print("🤖 Generating content with inline audio...")
         
-        # 3. Use modern API with structured JSON output
-        # Try with retry logic in case file needs processing time
-        # WebM files can take 20-30 seconds to process
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash-exp",
-                    contents=[prompt, audio_file],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=types.Schema(
-                            type=types.Type.OBJECT,
-                            properties={
+        # 3. Send audio inline - no upload needed!
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=audio_bytes,
+                    mime_type='audio/webm'
+                )
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
                         "reading_speed_wpm": types.Schema(
                             type=types.Type.NUMBER,
                             description="Reading speed in words per minute"
@@ -108,22 +102,6 @@ Analyze the audio for:
                 )
             )
         )
-                break  # Success!
-            except Exception as retry_error:
-                error_str = str(retry_error)
-                # Check if it's a file not ready error
-                if ("PROCESSING" in error_str or 
-                    "not ready" in error_str.lower() or 
-                    "FAILED_PRECONDITION" in error_str or
-                    "not in an ACTIVE state" in error_str):
-                    if attempt < max_retries - 1:
-                        # Aggressive progressive wait for WebM: 5s, 8s, 12s, 18s, 25s
-                        # wait_time = 5 + (attempt * 3) + (attempt * attempt)
-                        # print(f"⏳ Attempt {attempt + 1} failed, file still processing. Retrying in {wait_time}s...")
-                        time.sleep(1)
-                        continue
-                # Re-raise if it's not a processing error or we're out of retries
-                raise
         
         print(f"📥 Response received")
         print(f"📄 Response text (first 500 chars): {response.text[:500]}")
