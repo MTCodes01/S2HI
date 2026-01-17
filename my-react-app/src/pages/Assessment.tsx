@@ -152,11 +152,6 @@ const Assessment: React.FC = () => {
         if (!userId || !sessionId) return;
         setPhase('loading');
         try {
-            // Map score to type
-            let confLevel: "low" | "moderate" | "high" = "moderate";
-            if (confidenceScore < 35) confLevel = "low";
-            else if (confidenceScore > 75) confLevel = "high";
-
             // Don't end session yet - move to reading assessment first
             // The session will be ended after reading with reading results included
             setPhase('reading');
@@ -169,24 +164,24 @@ const Assessment: React.FC = () => {
     // Handle completion of reading aloud assessment
     const handleReadingComplete = async (audioResults: AudioAnalysisResult | null) => {
         if (!userId || !sessionId) return;
-        
+
         setReadingResults(audioResults);
         setPhase('loading');
-        
+
         try {
             // Map confidence score to type
             let confLevel: "low" | "moderate" | "high" = "moderate";
             if (confidenceScore < 35) confLevel = "low";
             else if (confidenceScore > 75) confLevel = "high";
-            
+
             // End session with reading results included
             const sessionResults = await endSession(
-                userId, 
-                sessionId, 
+                userId,
+                sessionId,
                 confLevel,
                 audioResults  // Pass reading results to backend
             );
-            
+
             setResults({ ...sessionResults, confidence_level: confLevel });
             setPhase('complete');
         } catch (err) {
@@ -269,7 +264,7 @@ const Assessment: React.FC = () => {
         if (!currentQuestion) return null;
 
         const { domain, difficulty, question_text, options, game_data } = currentQuestion;
-        
+
         // Use backend game_data if available, otherwise fall back to defaults
 
         // --- ATTENTION GAMES ---
@@ -283,20 +278,24 @@ const Assessment: React.FC = () => {
                     />
                 );
             } else if (difficulty === 'medium') {
-                const generatedItems: { shape: 'circle' | 'square', color: 'blue' | 'orange' }[] = [];
-                for (let i = 0; i < 10; i++) {
-                    generatedItems.push({
-                        shape: Math.random() > 0.5 ? 'circle' : 'square',
-                        color: Math.random() > 0.5 ? 'blue' : 'orange'
-                    });
+                // Use backend items if available, else generate 10 random items
+                let items = game_data?.items;
+                if (!items || items.length === 0) {
+                    items = [];
+                    for (let i = 0; i < 10; i++) {
+                        items.push({
+                            shape: Math.random() > 0.5 ? 'circle' : 'square',
+                            color: Math.random() > 0.5 ? 'blue' : 'orange'
+                        });
+                    }
                 }
 
                 const initialRule = game_data?.initialRule || 'COLOR';
-               
+
                 return (
                     <TaskSwitchSprint
                         initialRule={initialRule as 'COLOR' | 'SHAPE'}
-                        items={generatedItems}
+                        items={items}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -316,8 +315,8 @@ const Assessment: React.FC = () => {
             if (difficulty === 'easy') {
                 return (
                     <NumberSenseDash
-                        left={game_data?.left || Math.floor(Math.random() * 20)}
-                        right={game_data?.right || Math.floor(Math.random() * 20)}
+                        left={parseInt(game_data?.left || Math.floor(Math.random() * 20))}
+                        right={parseInt(game_data?.right || Math.floor(Math.random() * 20))}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
@@ -325,19 +324,19 @@ const Assessment: React.FC = () => {
             } else if (difficulty === 'medium') {
                 return (
                     <TimeEstimator
-                        targetSeconds={game_data?.targetSeconds || 5}
+                        targetSeconds={parseInt(game_data?.targetSeconds || 5)}
                         onAnswer={handleGameAnswer}
                         ageGroup={ageGroup}
                     />
                 );
             } else {
+                const mathOptions = (game_data?.options || options || ["4", "5", "6"]).map((o: any) => parseInt(o));
                 return (
                     <VisualMathMatch
                         equation={game_data?.equation || question_text}
-                        correctValue={game_data?.correctValue || 5}
-                        options={game_data?.options || [4, 5, 6]}
+                        correctValue={parseInt(game_data?.correctValue || currentQuestion.correct_option || "5")}
+                        options={mathOptions}
                         onAnswer={handleGameAnswer}
-                        ageGroup={ageGroup}
                     />
                 );
             }

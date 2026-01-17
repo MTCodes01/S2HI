@@ -48,18 +48,24 @@ def determine_next_parameters(last_correct, response_time_ms, current_difficulty
     
     next_difficulty = difficulty_levels[next_difficulty_idx]
     
-    # Domain rotation
-    domains = ['reading', 'math', 'attention']
+    # Domain rotation - Include writing/logic
+    domains = ['reading', 'math', 'attention', 'writing']
     min_count = min(domain_counts.values()) if domain_counts else 0
+    
+    # Prioritize domains with low counts
     least_used = [d for d in domains if domain_counts.get(d, 0) == min_count]
     
     import random
-    next_domain = random.choice(least_used)
+    # 70% chance to pick from least used, 30% total random for variety
+    if random.random() < 0.7:
+        next_domain = random.choice(least_used)
+    else:
+        next_domain = random.choice(domains)
     
     return next_domain, next_difficulty
 
 
-def generate_gemini_question(domain, difficulty, age_group, game_type, last_correct=None, response_time_ms=None, session_accuracy=1.0):
+def generate_gemini_question(domain, difficulty, age_group, game_type, last_correct=None, response_time_ms=None, session_accuracy=1.0, last_question_text=None):
     """Generate a question using Gemini AI"""
     # Build context
     context_parts = []
@@ -68,19 +74,21 @@ def generate_gemini_question(domain, difficulty, age_group, game_type, last_corr
     if response_time_ms:
         context_parts.append(f"in {response_time_ms}ms")
     context = ", ".join(context_parts) if context_parts else "First question"
+    if last_question_text:
+        context += f". PREVIOUS QUESTION WAS: '{last_question_text}'. DO NOT REPEAT THIS CONTENT."
     
     # Game-specific instructions
     instructions = {
-        'WordChainBuilder': "Generate a 4-6 letter word. Return targetWord and scrambledLetters array.",
+        'WordChainBuilder': "Generate a 4-6 letter word. Return JSON: { 'targetWord': 'WORD', 'scrambledLetters': ['W', 'R', 'O', 'D'] }",
         'TimeEstimator': "Set targetSeconds: Easy=3-5, Medium=5-7, Hard=7-10.",
-        'TaskSwitchSprint': "Generate 6-8 items with shape (circle/square) and color (blue/orange), plus initialRule (COLOR/SHAPE).",
-        'NumberSenseDash': "Generate two numbers: Age 6-8: 1-20, Age 9-11: 10-50, Age 12-14: 20-100.",
-        'VisualMathMatch': "Create equation and options array with correctValue.",
-        'PatternWatcher': "Generate expectedPattern array, currentItem, and isBreak boolean.",
+        'TaskSwitchSprint': "Generate 8-10 items. Each item: { 'shape': 'circle'|'square', 'color': 'blue'|'orange' }. Also set initialRule: 'COLOR'|'SHAPE'.",
+        'NumberSenseDash': "Generate two numbers 'left' and 'right'. Age 6-8: 1-20, Age 9-11: 10-50, Age 12-14: 20-100.",
+        'VisualMathMatch': "Create math equation (e.g. '12 + 15') and options array (numbers) with correctValue.",
+        'PatternWatcher': "No extra data needed, game generates sequence internally. Just provide age-appropriate encouragement in question_text.",
         'FocusGuard': "Set stimulus to 'green' or 'red'.",
         'PlanAheadPuzzle': "Set level 1-3 based on difficulty.",
-        'LetterFlipFrenzy': "Generate similar letters question (b/d/p/q style).",
-        'ReadAloudEcho': "Generate 10-15 word sentence appropriate for age."
+        'LetterFlipFrenzy': "Generate a question about similar looking letters (b/d/p/q).",
+        'ReadAloudEcho': "Generate a 10-15 word sentence appropriate for age."
     }
     
     instruction = instructions.get(game_type, "Generate appropriate question")
@@ -147,7 +155,7 @@ Generate JSON now:"""
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-2.0-flash',
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.9, response_mime_type='application/json')
         )
@@ -241,6 +249,19 @@ def generate_fallback_question(domain, difficulty, game_type):
             'game_type': game_type
         }
     
+    elif domain == 'writing' or domain == 'logic':
+        levels = {'easy': 1, 'medium': 2, 'hard': 3}
+        level = levels.get(difficulty, 1)
+        return {
+            'question_text': f'Plan ahead! Solve this Level {level} puzzle.',
+            'options': ['Start', 'Reset'],
+            'correct_option': 'Start',
+            'game_data': {'level': level},
+            'domain': domain,
+            'difficulty': difficulty,
+            'game_type': 'PlanAheadPuzzle'
+        }
+    
     # Generic fallback
     return {
         'question_text': f'Ready for a {domain} challenge?',
@@ -253,9 +274,11 @@ def generate_fallback_question(domain, difficulty, game_type):
     }
 
 
-def generate_adaptive_question(age_group, last_correct=None, response_time_ms=None, current_domain='reading', current_difficulty='easy', domain_counts=None, session_accuracy=1.0):
+def generate_adaptive_question(age_group, last_correct=None, response_time_ms=None, current_domain='reading', current_difficulty='easy', domain_counts=None, session_accuracy=1.0, last_question_text=None, next_domain=None, next_difficulty=None):
     """Main entry point for adaptive question generation"""
-    if last_correct is None:
+    if next_domain and next_difficulty:
+        domain, difficulty = next_domain, next_difficulty
+    elif last_correct is None:
         domain, difficulty = 'reading', 'easy'
     else:
         domain, difficulty = determine_next_parameters(
@@ -265,4 +288,4 @@ def generate_adaptive_question(age_group, last_correct=None, response_time_ms=No
     
     game_type = GAME_TYPE_MAP.get(domain, {}).get(difficulty, 'LetterFlipFrenzy')
     
-    return generate_gemini_question(domain, difficulty, age_group, game_type, last_correct, response_time_ms, session_accuracy)
+    return generate_gemini_question(domain, difficulty, age_group, game_type, last_correct, response_time_ms, session_accuracy, last_question_text)

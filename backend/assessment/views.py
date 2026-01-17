@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
 
-from .models import User, Session, Question, UserResponse, MistakePattern, FinalPrediction, DashboardCache
+from .models import User, Session, Question, UserResponse, MistakePattern, FinalPrediction
 from .serializers import (
     StartSessionRequestSerializer,
     StartSessionResponseSerializer,
@@ -124,10 +124,14 @@ class GetNextQuestionView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Default parameters in case of early failure
+        next_domain = 'reading'
+        next_difficulty = 'easy'
+
         # Get next adaptive question using Gemini AI (with PKL fallback)
         try:
             # 🚀 NEW: Use Gemini AI for adaptive question generation
-            from .gemini_question_service import generate_adaptive_question
+            from .gemini_question_service import generate_adaptive_question, determine_next_parameters
             
             # Get user and session info
             user = session.user
@@ -142,7 +146,8 @@ class GetNextQuestionView(APIView):
             domain_counts = {
                 'reading': responses.filter(domain='reading').count(),
                 'math': responses.filter(domain='math').count(),
-                'attention': responses.filter(domain='attention').count()
+                'attention': responses.filter(domain='attention').count(),
+                'writing': responses.filter(domain='writing').count()
             }
             
             # Get current difficulty from last response
@@ -153,6 +158,16 @@ class GetNextQuestionView(APIView):
             else:
                 current_difficulty = 'easy'
                 current_domain = 'reading'
+
+            # PRE-CALCULATE next parameters so they are available for fallbacks
+            next_domain, next_difficulty = determine_next_parameters(
+                correct if correct is not None else True, 
+                response_time_ms or 1000, 
+                current_difficulty,
+                domain_counts, 
+                session_accuracy, 
+                user.age_group
+            )
             
             # Check if session should end (30 questions max)
             if total_responses >= 30:
@@ -165,8 +180,11 @@ class GetNextQuestionView(APIView):
                     status=status.HTTP_200_OK
                 )
             
+            # Get last question text for variety
+            last_question_text = last_response.question.question_text if responses.exists() else None
+
             # Generate question via Gemini
-            print(f"🤖 Generating question via Gemini AI...")
+            print(f"🤖 Generating question via Gemini AI ({next_domain}/{next_difficulty})...")
             question_data = generate_adaptive_question(
                 age_group=user.age_group,
                 last_correct=correct,
@@ -174,7 +192,10 @@ class GetNextQuestionView(APIView):
                 current_domain=current_domain,
                 current_difficulty=current_difficulty,
                 domain_counts=domain_counts,
-                session_accuracy=session_accuracy
+                session_accuracy=session_accuracy,
+                last_question_text=last_question_text,
+                next_domain=next_domain,
+                next_difficulty=next_difficulty
             )
             
             # Create unique question ID
@@ -223,14 +244,14 @@ class GetNextQuestionView(APIView):
                     import numpy as np
                     generator = joblib.load(generator_path)
                     
-                    # Simplified PKL generation
-                    question_data = generator.generate_question('reading', 'medium')
+                    # Use determined parameters for PKL generator
+                    question_data = generator.generate_question(next_domain, next_difficulty)
                     question_id = f"Q_{session.session_id}_{UserResponse.objects.filter(session=session).count() + 1}"
                     
                     return Response({
                         'question_id': question_id,
-                        'domain': question_data['domain'],
-                        'difficulty': question_data['difficulty'],
+                        'domain': next_domain,
+                        'difficulty': next_difficulty,
                         'question_text': question_data['question_text'],
                         'options': question_data['options'],
                         'correct_option': question_data.get('correct_option'),
@@ -619,72 +640,30 @@ class GetDashboardDataView(APIView):
                 'attention_score': 0
             }
         
-        # 💾 Check if dashboard data is already cached
-        try:
-            cache = DashboardCache.objects.get(session=session)
-            print(f"✅ Loading dashboard data from cache for session {session_id}")
+        # 🤖 Use Gemini AI to generate personalized insights and recommendations
+        total_questions = responses.count()
+        gemini_insights = generate_dashboard_insights(
+            age_group=user.age_group,
+            domain_patterns=domain_patterns,
+            prediction_data=prediction_data,
+            total_questions=total_questions
+        )
+        
+        # Use Gemini-generated content if available, otherwise use fallback
+        if gemini_insights:
+            summary = gemini_insights['summary']
+            ai_key_insights = gemini_insights['key_insights']
             
-            # Use cached Gemini-generated content
-            summary = cache.summary
-            ai_key_insights = cache.key_insights
-            ai_next_steps = cache.next_steps
-            
-            # Update domain patterns with cached recommendations
-            domain_patterns['reading']['recommendation'] = cache.reading_recommendation
-            domain_patterns['math']['recommendation'] = cache.math_recommendation
-            domain_patterns['focus']['recommendation'] = cache.focus_recommendation
-            
-        except DashboardCache.DoesNotExist:
-            print(f"🤖 No cache found. Generating new dashboard insights with Gemini...")
-            
-            # Generate new insights with Gemini AI
-            total_questions = responses.count()
-            gemini_insights = generate_dashboard_insights(
-                age_group=user.age_group,
-                domain_patterns=domain_patterns,
-                prediction_data=prediction_data,
-                total_questions=total_questions
-            )
-            
-            # Use Gemini-generated content if available, otherwise use fallback
-            if gemini_insights:
-                summary = gemini_insights['summary']
-                ai_key_insights = gemini_insights['key_insights']
-                ai_next_steps = gemini_insights.get('next_steps', [])
-                
-                # Update domain patterns with AI recommendations
-                reading_rec = gemini_insights['reading_recommendation']
-                math_rec = gemini_insights['math_recommendation']
-                focus_rec = gemini_insights['focus_recommendation']
-                
-                domain_patterns['reading']['recommendation'] = reading_rec
-                domain_patterns['math']['recommendation'] = math_rec
-                domain_patterns['focus']['recommendation'] = focus_rec
-                
-                # 💾 Save to cache for future requests
-                try:
-                    DashboardCache.objects.create(
-                        session=session,
-                        user=user,
-                        summary=summary,
-                        key_insights=ai_key_insights,
-                        next_steps=ai_next_steps,
-                        reading_recommendation=reading_rec,
-                        math_recommendation=math_rec,
-                        focus_recommendation=focus_rec
-                    )
-                    print(f"✅ Dashboard data cached successfully")
-                except Exception as e:
-                    print(f"⚠️ Failed to save cache: {e}")
-                    # Continue anyway, user still gets the data
-                    
-            else:
-                # Fallback to basic summary if Gemini fails
-                print("⚠️ Gemini failed, using fallback logic for recommendations")
-                summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
-                ai_key_insights = key_insights
-                ai_next_steps = []
-                # Recommendations are already set by _calculate_domain_patterns fallback
+            # Update domain patterns with AI recommendations
+            domain_patterns['reading']['recommendation'] = gemini_insights['reading_recommendation']
+            domain_patterns['math']['recommendation'] = gemini_insights['math_recommendation']
+            domain_patterns['focus']['recommendation'] = gemini_insights['focus_recommendation']
+        else:
+            # Fallback to basic summary if Gemini fails
+            print("⚠️ Gemini failed, using fallback logic for recommendations")
+            summary = ' '.join(key_insights) if key_insights else 'Assessment completed. Review the domain analysis below for detailed insights.'
+            ai_key_insights = key_insights
+            # Recommendations are already set by _calculate_domain_patterns fallback
         
         # Format assessment date
         from datetime import datetime
@@ -699,7 +678,6 @@ class GetDashboardDataView(APIView):
             'assessment_date': assessment_date,
             'summary': summary,
             'key_insights': ai_key_insights,
-            'next_steps': ai_next_steps,
             'patterns': domain_patterns
         }
         
