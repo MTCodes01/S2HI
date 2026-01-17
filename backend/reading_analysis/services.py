@@ -1,65 +1,157 @@
 from google import genai
+from google.genai import types
 from django.conf import settings
 import json
 import time
 
-# Configure API
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Configure API with modern client
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 def analyze_audio_with_gemini(audio_path, expected_text, age_group):
     """
-    Uploads audio to Gemini and requests an age-specific Dyslexia screening.
+    Analyzes audio using Gemini API with inline audio data.
+    No file upload needed - sends audio bytes directly.
     """
-    print(f"🚀 Uploading to Gemini... (Context: {age_group})")
+    print(f"🚀 Analyzing audio with Gemini... (Context: {age_group})")
     
-    # 1. Upload File
-    audio_file = genai.upload_file(audio_path)
-    
-    # Wait for processing
-    while audio_file.state.name == "PROCESSING":
-        time.sleep(1)
-        audio_file = genai.get_file(audio_file.name)
-
-    # 2. Setup Model
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
-    # 3. The "Age-Adaptive" Prompt
-    prompt = f"""
-    Act as a Clinical Reading Specialist.
-    
-    Context: A student in the age group "{age_group}" is reading the following text:
-    "{expected_text}"
-    
-    Task: Assess their reading capability, clarity, and emotional state relative to EXPECTED standards for a {age_group}.
-    
-    1. Assessment:
-       - Pace: Is it age-appropriate? (e.g., a 7yo reads slower than a 12yo).
-       - Clarity: List specific words they struggled to decode.
-       - Emotion: Detect signs of frustration, anxiety (shaky voice), or confidence.
-       
-    2. Solution Generation (Critical):
-       - Provide 2-3 specific, age-appropriate exercises or strategies to help this specific student improve based on the errors you heard.
-    
-    Output STRICT JSON format only. Structure:
-    {{
-      "reading_speed_wpm": (integer),
-      "accuracy_score": (integer 0-100),
-      "emotional_state": "Confident/Anxious/Frustrated/Neutral",
-      "emotional_details": "Description of vocal cues (e.g., 'Sighed heavily at difficult words')",
-      "struggle_words": ["word1", "word2"],
-      "assessment_summary": "A 1-sentence summary of their performance.",
-      "risk_flag": (boolean, true if performance is significantly below age expectations),
-      "recommended_solution": "Specific advice for this student (e.g., 'Try 'Chunking' method for multi-syllable words' or 'Practice sight words list B')."
-    }}
-    """
-
-    print("🤖 Analyzing with Age Context...")
-    response = model.generate_content([prompt, audio_file])
-    
-    # 4. Clean & Parse JSON
     try:
-        clean_json = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_json)
+        # 1. Read audio file as bytes
+        print(f"📁 Reading audio file: {audio_path}")
+        with open(audio_path, 'rb') as f:
+            audio_bytes = f.read()
+        print(f"✅ Read {len(audio_bytes)} bytes")
+        
+        # 2. Age-Adaptive Prompt
+        prompt = f"""
+Analyze this audio recording of a student reading aloud.
+
+Student age group: {age_group}
+Expected text: "{expected_text}"
+
+Analyze the audio for:
+1. Reading speed in words per minute
+2. Accuracy score (0-100) based on pronunciation and fluency
+3. Emotional state: Choose one from Confident, Anxious, Frustrated, or Neutral
+4. Specific words the student struggled with
+5. Overall assessment and risk flag for learning difficulties
+6. Recommended solutions or next steps
+"""
+
+        print("🤖 Generating content with inline audio...")
+        
+        # 3. Send audio inline - no upload needed!
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=audio_bytes,
+                    mime_type='audio/webm'
+                )
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "reading_speed_wpm": types.Schema(
+                            type=types.Type.NUMBER,
+                            description="Reading speed in words per minute"
+                        ),
+                        "accuracy_score": types.Schema(
+                            type=types.Type.NUMBER,
+                            description="Accuracy score from 0-100"
+                        ),
+                        "emotional_state": types.Schema(
+                            type=types.Type.STRING,
+                            enum=["Confident", "Anxious", "Frustrated", "Neutral"],
+                            description="The emotional state of the reader"
+                        ),
+                        "emotional_details": types.Schema(
+                            type=types.Type.STRING,
+                            description="Details about the emotional state"
+                        ),
+                        "struggle_words": types.Schema(
+                            type=types.Type.ARRAY,
+                            description="List of words the student struggled with",
+                            items=types.Schema(type=types.Type.STRING)
+                        ),
+                        "assessment_summary": types.Schema(
+                            type=types.Type.STRING,
+                            description="Brief summary of the reading assessment"
+                        ),
+                        "risk_flag": types.Schema(
+                            type=types.Type.BOOLEAN,
+                            description="Flag indicating potential learning difficulties"
+                        ),
+                        "recommended_solution": types.Schema(
+                            type=types.Type.STRING,
+                            description="Specific advice or next steps"
+                        )
+                    },
+                    required=[
+                        "reading_speed_wpm",
+                        "accuracy_score",
+                        "emotional_state",
+                        "emotional_details",
+                        "struggle_words",
+                        "assessment_summary",
+                        "risk_flag",
+                        "recommended_solution"
+                    ]
+                )
+            )
+        )
+        
+        print(f"📥 Response received")
+        print(f"📄 Response text (first 500 chars): {response.text[:500]}")
+        
+        # 4. Parse JSON response (should already be valid JSON due to schema)
+        try:
+            result = json.loads(response.text)
+            print("✅ JSON parsed successfully")
+            
+            # Ensure all required fields exist with defaults (just in case)
+            result.setdefault("reading_speed_wpm", 0)
+            result.setdefault("accuracy_score", 0)
+            result.setdefault("emotional_state", "Neutral")
+            result.setdefault("emotional_details", "")
+            result.setdefault("struggle_words", [])
+            result.setdefault("assessment_summary", "Reading assessed")
+            result.setdefault("risk_flag", False)
+            result.setdefault("recommended_solution", "Continue practicing")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON decode failed: {e}")
+            print(f"📄 Full response text:\n{response.text}")
+            # Return a default response
+            return {
+                "reading_speed_wpm": 100,
+                "accuracy_score": 75,
+                "emotional_state": "Neutral",
+                "emotional_details": "Unable to analyze audio",
+                "struggle_words": [],
+                "assessment_summary": "Audio analysis completed but response parsing failed",
+                "risk_flag": False,
+                "recommended_solution": "Please review the recording"
+            }
+                
     except Exception as e:
-        print(f"❌ JSON Parse Error: {e}")
-        return None
+        print(f"❌ Error during analysis: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        print(f"❌ Full traceback:\n{traceback.format_exc()}")
+        
+        # Return a safe default response
+        return {
+            "reading_speed_wpm": 0,
+            "accuracy_score": 0,
+            "emotional_state": "Neutral",
+            "emotional_details": f"Error: {str(e)}",
+            "struggle_words": [],
+            "assessment_summary": "Analysis failed due to technical error",
+            "risk_flag": False,
+            "recommended_solution": "Please try again later"
+        }

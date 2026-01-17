@@ -113,3 +113,45 @@ export interface DashboardDataResponse {
   };
 }
 
+// Audio Recording Types
+export type RecordingStatus = 'idle' | 'requesting' | 'recording' | 'stopped' | 'error';
+
+export interface AudioRecordingState {
+  status: RecordingStatus;
+  audioBlob: Blob | null;
+  audioUrl: string | null;
+  error: string | null;
+  recordingTime: number;
+}
+
+export interface ReadingSentence {
+  sentence_id: string;
+  text: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  domain: string;
+}
+
+export interface AudioAnalysisResult {
+  status: string;
+  analysis: {
+    transcribed_text?: string;
+    accuracy_score: number;
+    reading_speed_wpm: number;
+    struggle_words: string[];
+    assessment_summary: string;
+    risk_flag: boolean;
+    recommended_solution: string;
+  };
+}
+
+// Assessment Stage Types
+export type AssessmentStage = 'questions' | 'reading' | 'complete';
+
+export interface FullAssessmentState {
+  stage: AssessmentStage;
+  userId: number | null;
+  sessionId: string | null;
+  ageGroup: string;
+  questionResults: AssessmentResult | null;
+  readingResults: AudioAnalysisResult | null;
+}

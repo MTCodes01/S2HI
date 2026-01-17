@@ -134,4 +134,70 @@ export async function getUserHistory(
   return apiRequest('/get-user-history/', { user_id: userId });
 }
 
+// Reading sentences for reading aloud assessment
+const READING_SENTENCES = [
+  { sentence_id: 'RS001', text: 'The quick brown fox jumps over the lazy dog.', difficulty: 'easy' as const, domain: 'reading' },
+  { sentence_id: 'RS002', text: 'Sally sells seashells by the seashore on sunny summer days.', difficulty: 'medium' as const, domain: 'reading' },
+  { sentence_id: 'RS003', text: 'Peter Piper picked a peck of pickled peppers.', difficulty: 'medium' as const, domain: 'reading' },
+  { sentence_id: 'RS004', text: 'She sells fresh fish by the shore every morning.', difficulty: 'easy' as const, domain: 'reading' },
+  { sentence_id: 'RS005', text: 'The butterfly fluttered between the beautiful bright flowers.', difficulty: 'hard' as const, domain: 'reading' },
+];
 
+/**
+ * Get a reading sentence for the reading aloud assessment
+ */
+export async function getReadingSentence(
+  _userId: number,
+  _sessionId: string
+): Promise<{ sentence_id: string; text: string; difficulty: string; domain: string }> {
+  // For now, return a random sentence from the local list
+  // In the future, this could be an API call to get personalized sentences
+  const randomIndex = Math.floor(Math.random() * READING_SENTENCES.length);
+  return Promise.resolve(READING_SENTENCES[randomIndex]);
+}
+
+/**
+ * Submit audio recording for analysis
+ */
+export async function submitAudioRecording(
+  audioBlob: Blob,
+  userId: number | string,
+  sessionId: string,
+  expectedText: string,
+  ageGroup: string
+): Promise<{
+  status: string;
+  analysis: {
+    transcribed_text?: string;
+    accuracy_score: number;
+    reading_speed_wpm: number;
+    struggle_words: string[];
+    assessment_summary: string;
+    risk_flag: boolean;
+    recommended_solution: string;
+  };
+}> {
+  const formData = new FormData();
+  
+  // Determine file extension based on blob type
+  const extension = audioBlob.type.includes('webm') ? 'webm' : 
+                    audioBlob.type.includes('mp4') ? 'mp4' : 'wav';
+  
+  formData.append('audio', audioBlob, `recording.${extension}`);
+  formData.append('user_id', String(userId));
+  formData.append('session_id', sessionId);
+  formData.append('expected_text', expectedText);
+  formData.append('age_group', ageGroup);
+
+  const response = await fetch(`${API_BASE_URL}/reading/analyze-reading/`, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Network error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}

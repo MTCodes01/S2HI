@@ -133,6 +133,7 @@ staticfiles/
 
 # Media files
 media/
+reading_audio/
 
 # Environment files
 .env
