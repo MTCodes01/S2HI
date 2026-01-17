@@ -32,6 +32,8 @@ class QuestionResponseSerializer(serializers.Serializer):
     difficulty = serializers.CharField()
     question_text = serializers.CharField()
     options = serializers.ListField(child=serializers.CharField())
+    game_type = serializers.CharField(required=False, allow_null=True)  # NEW: Game component type
+    game_data = serializers.JSONField(required=False, allow_null=True)  # NEW: Game-specific parameters
 
 
 class SubmitAnswerRequestSerializer(serializers.Serializer):
@@ -45,6 +47,9 @@ class SubmitAnswerRequestSerializer(serializers.Serializer):
     response_time_ms = serializers.IntegerField()
     confidence = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mistake_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    game_type = serializers.CharField(required=False, allow_null=True)  # NEW: Game type
+    game_data = serializers.JSONField(required=False, allow_null=True)  # NEW: Game-specific data
+    game_metrics = serializers.JSONField(required=False, allow_null=True)  # NEW: Game performance metrics
 
 
 class SubmitAnswerResponseSerializer(serializers.Serializer):
@@ -58,6 +63,7 @@ class EndSessionRequestSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     session_id = serializers.CharField()
     confidence_level = serializers.CharField(required=False, allow_null=True)
+    reading_results = serializers.JSONField(required=False, allow_null=True)  # NEW: Reading analysis data
 
 
 class EndSessionResponseSerializer(serializers.Serializer):

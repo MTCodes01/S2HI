@@ -369,12 +369,17 @@ def get_next_question_ml(
     return (domain, difficulty)
 
 
-def get_prediction(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+def get_prediction(responses: List[Dict[str, Any]], reading_results: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Get risk prediction from ML model (using team's risk_classifier.pkl).
     
     Args:
         responses: List of user response dictionaries
+        reading_results: Optional dict with reading analysis data
+            - wpm: Words per minute
+            - accuracy_score: Accuracy percentage (0-100)
+            - mispronunciation_count: Number of mispronunciations
+            - risk_flag: Boolean risk flag from Gemini
         
     Returns:
         Dictionary with risk, confidence_level, and key_insights
@@ -489,6 +494,61 @@ def get_prediction(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
         'dyscalculia': round(min(1.0, max(0.1, 1.0 - math_acc + (pv_rate * 0.5))), 2),
         'attention': round(min(1.0, max(0.1, 1.0 - focus_acc + (impulse_rate * 0.5))), 2)
     }
+    
+    # Incorporate reading analysis results if available
+    if reading_results:
+        # Extract reading metrics
+        wpm = reading_results.get('wpm', 100)  # Default average WPM
+        accuracy_score = reading_results.get('accuracy_score', 80)  # 0-100
+        mispronunciation_count = reading_results.get('mispronunciation_count', 0)
+        reading_risk_flag = reading_results.get('risk_flag', False)
+        
+        # Normalize metrics
+        reading_accuracy = accuracy_score / 100.0  # Convert to 0-1
+        
+        # Age-appropriate WPM benchmarks
+        # 6-8: 60-90 WPM, 9-11: 90-120 WPM, 12-14: 120-150 WPM
+        expected_wpm = 100  # Default
+        wpm_factor = max(0, 1.0 - (wpm / expected_wpm))  # Lower WPM = higher risk
+        
+        # Calculate mispronunciation rate (assume ~50 words read)
+        misp_rate = min(1.0, mispronunciation_count / 10.0)
+        
+        # Enhanced dyslexia risk calculation with reading data
+        reading_risk = (
+            (1.0 - reading_accuracy) * 0.4 +  # Reading accuracy weight
+            wpm_factor * 0.3 +                 # Reading speed weight
+            misp_rate * 0.2 +                  # Mispronunciation weight
+            (0.1 if reading_risk_flag else 0)  # Gemini AI flag weight
+        )
+        
+        # Combine with question-based dyslexia assessment (weighted average)
+        original_dyslexia = scores['dyslexia']
+        scores['dyslexia'] = round(min(1.0, (original_dyslexia * 0.5 + reading_risk * 0.5)), 2)
+        
+        # Add reading-specific insights
+        if wpm < 80:
+            key_insights.append(f"Reading speed below expected level ({wpm} WPM)")
+        
+        if reading_accuracy < 0.7:
+            key_insights.append(f"Reading accuracy during oral assessment: {int(reading_accuracy*100)}%")
+        
+        if mispronunciation_count > 3:
+            key_insights.append(f"Multiple mispronunciations detected ({mispronunciation_count} words)")
+        
+        if reading_risk_flag:
+            key_insights.append("AI-based reading analysis detected potential difficulties")
+    
+    # Re-evaluate final label based on updated scores
+    if reading_results:
+        max_risk_type = max(scores, key=scores.get)
+        max_risk_value = scores[max_risk_type]
+        
+        if max_risk_value > 0.6:
+            final_label = f"{max_risk_type}-risk"
+        elif max_risk_value < 0.3:
+            final_label = 'low-risk'
+        # else keep the original prediction
     
     return {
         'risk': final_label,

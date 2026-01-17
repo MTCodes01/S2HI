@@ -94,13 +94,26 @@ export async function submitAnswer(
 export async function endSession(
   userId: number,
   sessionId: string,
-  confidence?: string
+  confidence?: string,
+  readingResults?: any  // NEW: Reading analysis results
 ): Promise<AssessmentResult> {
-  return apiRequest<AssessmentResult>('/end-session/', {
+  const body: Record<string, unknown> = {
     user_id: userId,
     session_id: sessionId,
     confidence_level: confidence
-  });
+  };
+  
+  // Include reading results if available
+  if (readingResults) {
+    body.reading_results = {
+      wpm: readingResults.analysis?.reading_speed_wpm,
+      accuracy_score: readingResults.analysis?.accuracy_score,
+      mispronunciation_count: readingResults.analysis?.struggle_words?.length || 0,
+      risk_flag: readingResults.analysis?.risk_flag
+    };
+  }
+  
+  return apiRequest<AssessmentResult>('/end-session/', body);
 }
 
 /**

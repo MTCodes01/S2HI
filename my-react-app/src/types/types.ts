@@ -14,6 +14,7 @@ export interface Question {
   question_text: string;
   options: string[];
   correct_option?: string;
+  game_data?: any;  // Game-specific parameters from backend
   end_session?: boolean;
   message?: string;
 }

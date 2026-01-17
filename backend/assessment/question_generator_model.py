@@ -19,6 +19,30 @@ class QuestionGeneratorModel:
         self.domain_classifier = None
         self.difficulty_classifier = None
         
+        # Game type mapping: domain -> difficulty -> game_type
+        self.game_types = {
+            'reading': {
+                'easy': 'LetterFlipFrenzy',
+                'medium': 'WordChainBuilder',
+                'hard': 'ReadAloudEcho'
+            },
+            'math': {
+                'easy': 'NumberSenseDash',
+                'medium': 'TimeEstimator',
+                'hard': 'VisualMathMatch'
+            },
+            'attention': {
+                'easy': 'FocusGuard',
+                'medium': 'TaskSwitchSprint',
+                'hard': 'PatternWatcher'
+            },
+            'writing': {
+                'easy': 'PlanAheadPuzzle',
+                'medium': 'PlanAheadPuzzle',
+                'hard': 'PlanAheadPuzzle'
+            }
+        }
+        
         # Question templates by domain and difficulty
         self.templates = {
             'reading': {
@@ -198,12 +222,20 @@ class QuestionGeneratorModel:
             options.insert(random.randint(0, 3), correct_word)
             correct_idx = options.index(correct_word)
         
+        # Determine game type
+        game_type = self.game_types.get(domain, {}).get(difficulty, 'LetterFlipFrenzy')
+        
+        # Generate game-specific data
+        game_data = self._generate_game_data(game_type, domain, difficulty, question_text, options, correct_idx)
+        
         return {
             'domain': domain,
             'difficulty': difficulty,
             'question_text': question_text,
             'options': options,
-            'correct_option': options[correct_idx]
+            'correct_option': options[correct_idx],
+            'game_type': game_type,
+            'game_data': game_data
         }
     
     def _generate_options(self, correct_answer):
@@ -225,3 +257,108 @@ class QuestionGeneratorModel:
         # Shuffle
         random.shuffle(options)
         return options[:4]
+    
+    def _generate_game_data(self, game_type, domain, difficulty, question_text, options, correct_idx):
+        """Generate game-specific data for interactive games."""
+        game_data = {}
+        
+        if game_type == 'WordChainBuilder':
+            # Generate target word and scrambled letters
+            target_word = options[correct_idx] if options else 'READ'
+            scrambled = list(target_word.upper())
+            random.shuffle(scrambled)
+            game_data = {
+                'targetWord': target_word,
+                'scrambledLetters': scrambled
+            }
+        
+        elif game_type == 'TimeEstimator':
+            # Time estimation challenge
+            if difficulty == 'easy':
+                target_seconds = random.choice([3, 4, 5])
+            elif difficulty == 'medium':
+                target_seconds = random.choice([5, 6, 7])
+            else:
+                target_seconds = random.choice([7, 8, 10])
+            
+            game_data = {
+                'targetSeconds': target_seconds
+            }
+        
+        elif game_type == 'TaskSwitchSprint':
+            # Generate sequence of shapes and colors
+            shapes = ['circle', 'square']
+            colors = ['blue', 'orange']
+            num_items = 4 if difficulty == 'easy' else 6 if difficulty == 'medium' else 8
+            
+            items = []
+            for _ in range(num_items):
+                items.append({
+                    'shape': random.choice(shapes),
+                    'color': random.choice(colors)
+                })
+            
+            game_data = {
+                'initialRule': random.choice(['COLOR', 'SHAPE']),
+                'items': items
+            }
+        
+        elif game_type == 'PlanAheadPuzzle':
+            # Puzzle level based on difficulty
+            level = 1 if difficulty == 'easy' else 2 if difficulty == 'medium' else 3
+            game_data = {
+                'level': level
+            }
+        
+        elif game_type == 'FocusGuard':
+            # Go/No-Go task
+            game_data = {
+                'stimulus': random.choice(['green', 'red'])
+            }
+        
+        elif game_type == 'NumberSenseDash':
+            # Number comparison
+            left = random.randint(1, 20) if difficulty == 'easy' else random.randint(10, 50)
+            right = random.randint(1, 20) if difficulty == 'easy' else random.randint(10, 50)
+            game_data = {
+                'left': left,
+                'right': right
+            }
+        
+        elif game_type == 'VisualMathMatch':
+            # Visual equation matching
+            if options and len(options) > 0:
+                correct_value = int(options[correct_idx]) if options[correct_idx].isdigit() else 5
+            else:
+                correct_value = random.randint(1, 10)
+            
+            game_data = {
+                'equation': question_text,
+                'correctValue': correct_value,
+                'options': [int(o) if o.isdigit() else 0 for o in options] if options else [correct_value]
+            }
+        
+        elif game_type == 'PatternWatcher':
+            # Pattern recognition
+            patterns = [['A', 'B', 'A', 'B'], ['1', '2', '1', '2'], ['X', 'Y', 'X', 'Y']]
+            pattern = random.choice(patterns)
+            game_data = {
+                'expectedPattern': pattern,
+                'currentItem': pattern[0] if random.random() > 0.2 else 'C',
+                'isBreak': random.random() < 0.3
+            }
+        
+        elif game_type == 'ReadAloudEcho':
+            # Reading aloud - use question_text as the sentence
+            game_data = {
+                'sentence': question_text
+            }
+        
+        elif game_type == 'LetterFlipFrenzy':
+            # Letter recognition with similar letters
+            game_data = {
+                'question': question_text,
+                'options': options if options else ['b', 'd', 'p', 'q']
+            }
+        
+        return game_data
