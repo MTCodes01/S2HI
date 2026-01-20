@@ -47,6 +47,7 @@ const Assessment: React.FC = () => {
         { value: '6-8', label: '6-8 years' },
         { value: '9-11', label: '9-11 years' },
         { value: '12-14', label: '12-14 years' },
+        { value: '14+', label: '14+ years' },
     ];
 
     // Start a new session
