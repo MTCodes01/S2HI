@@ -25,8 +25,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Create media directory for file uploads
-RUN mkdir -p /app/media
+# Create media and db directories with proper permissions
+RUN mkdir -p /app/media /app/db && \
+    chmod -R 777 /app/db /app/media
 
 # Expose port 8000
 EXPOSE 8000

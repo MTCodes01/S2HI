@@ -73,10 +73,12 @@ WSGI_APPLICATION = 'ld_screening.wsgi.application'
 # For production, configure MySQL as shown in the commented section below
 
 # SQLite (Default - No additional setup required)
+# Support both local development and Docker deployment
+DB_PATH = os.getenv('DATABASE_PATH', str(BASE_DIR / 'db.sqlite3'))
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_PATH,
     }
 }
 

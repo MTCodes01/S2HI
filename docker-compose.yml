@@ -11,11 +11,12 @@ services:
     volumes:
       # Mount media directory for persistent file uploads
       - ./backend/media:/app/media
-      # Mount database for persistence
-      - ./backend/db.sqlite3:/app/db.sqlite3
+      # Use named volume for database persistence
+      - s2hi-db:/app/db
     environment:
       - DJANGO_SETTINGS_MODULE=ld_screening.settings
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DATABASE_PATH=/app/db/db.sqlite3
     env_file:
       - ./backend/.env
     restart: unless-stopped
@@ -34,6 +35,10 @@ services:
     restart: unless-stopped
     networks:
       - s2hi-network
+
+volumes:
+  s2hi-db:
+    driver: local
 
 networks:
   s2hi-network:
