@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { startSession, getNextQuestion, submitAnswer, endSession } from '../services/api';
 import type { Question, AssessmentResult, AudioAnalysisResult } from '../types/types';
 import Mascot from '../components/Mascot';
-import ReadingAloud from './ReadingAloud';
+
 import '../styles/assessment.css';
 
 // Game Imports
@@ -18,7 +18,7 @@ import TimeEstimator from '../games/TimeEstimator';
 import PlanAheadPuzzle from '../games/PlanAheadPuzzle';
 import ConfidenceSlider from '../games/ConfidenceSlider';
 
-type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'confidence' | 'reading' | 'complete' | 'error';
+type AssessmentPhase = 'welcome' | 'question' | 'loading' | 'confidence' | 'complete' | 'error';
 
 const Assessment: React.FC = () => {
     const navigate = useNavigate();
@@ -150,43 +150,28 @@ const Assessment: React.FC = () => {
         if (!userId || !sessionId) return;
         setPhase('loading');
         try {
-            // Don't end session yet - move to reading assessment first
-            // The session will be ended after reading with reading results included
-            setPhase('reading');
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to move to reading phase');
-            setPhase('error');
-        }
-    };
-
-    // Handle completion of reading aloud assessment
-    const handleReadingComplete = async (audioResults: AudioAnalysisResult | null) => {
-        if (!userId || !sessionId) return;
-
-        setReadingResults(audioResults);
-        setPhase('loading');
-
-        try {
             // Map confidence score to type
             let confLevel: "low" | "moderate" | "high" = "moderate";
             if (confidenceScore < 35) confLevel = "low";
             else if (confidenceScore > 75) confLevel = "high";
 
-            // End session with reading results included
+            // End session without reading results
             const sessionResults = await endSession(
                 userId,
                 sessionId,
                 confLevel,
-                audioResults  // Pass reading results to backend
+                null // No reading results
             );
 
             setResults({ ...sessionResults, confidence_level: confLevel });
             setPhase('complete');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to finalize session with reading results');
+            setError(err instanceof Error ? err.message : 'Failed to complete session');
             setPhase('error');
         }
     };
+
+
 
     // Restart assessment
     const handleRestart = () => {
@@ -478,29 +463,7 @@ const Assessment: React.FC = () => {
         </div>
     );
 
-    // Render reading aloud phase
-    const renderReading = () => {
-        if (!userId || !sessionId) {
-            return (
-                <div className="error-container">
-                    <div className="error-card">
-                        <div className="error-icon">⚠️</div>
-                        <h2>Session Error</h2>
-                        <p>Session data is missing. Please restart the assessment.</p>
-                        <button className="retry-btn" onClick={handleRestart}>Restart</button>
-                    </div>
-                </div>
-            );
-        }
-        return (
-            <ReadingAloud
-                userId={userId}
-                sessionId={sessionId}
-                ageGroup={ageGroup}
-                onComplete={handleReadingComplete}
-            />
-        );
-    };
+
 
     return (
         <div className="assessment-page">
@@ -508,7 +471,7 @@ const Assessment: React.FC = () => {
             {phase === 'question' && renderQuestion()}
             {phase === 'loading' && renderLoading()}
             {phase === 'confidence' && renderConfidence()}
-            {phase === 'reading' && renderReading()}
+
             {phase === 'complete' && renderComplete()}
             {phase === 'error' && renderError()}
         </div>

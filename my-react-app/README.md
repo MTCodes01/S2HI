@@ -1,6 +1,6 @@
-# S2HI Frontend
+# LEAP Frontend
 
-The React-based frontend for the S2HI (AI Samasya) learning disability assessment platform.
+The React-based frontend for the LEAP (AI Samasya) learning disability assessment platform.
 
 ## Overview
 This application provides an interactive, gamified interface for children to complete assessments. It communicates with the Django backend to serve adaptive questions and display results.

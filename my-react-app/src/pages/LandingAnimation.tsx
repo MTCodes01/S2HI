@@ -35,8 +35,8 @@ const LandingAnimation: React.FC<LandingAnimationProps> = ({ onComplete }) => {
           {/* Main content */}
           <div className="content-wrapper">
             <div className="logo-container">
-              <h1 className="landing-text">S2HI</h1>
-              <div className="subtitle">Unleash Your Special Powers</div>
+              <h1 className="landing-text">LEAP</h1>
+              <div className="subtitle">Learning Evaluation and Assessment Platform</div>
             </div>
             
             {/* Custom mascot inline */}
