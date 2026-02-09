@@ -10,8 +10,18 @@ from typing import Dict, Any
 from google import genai
 from google.genai import types
 
-# Initialize Gemini client  
-client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+# Lazy client initialization - only create when needed
+_client = None
+
+def get_client():
+    """Get or create the Gemini API client"""
+    global _client
+    if _client is None:
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is not set")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 # Game type mapping for each domain/difficulty
 GAME_TYPE_MAP = {
@@ -278,7 +288,7 @@ NOTE: For ReadAloudEcho (typing game), set:
 Generate JSON now:"""
 
     try:
-        response = client.models.generate_content(
+        response = get_client().models.generate_content(
             model='gemini-2.0-flash',
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.9, response_mime_type='application/json')

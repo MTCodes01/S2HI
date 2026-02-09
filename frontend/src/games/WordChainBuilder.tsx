@@ -15,7 +15,7 @@ type Props = {
     ageGroup?: string;
 };
 
-export default function WordChainBuilder({ targetWord, scrambledLetters, onAnswer, ageGroup = "9-11" }: Props) {
+export default function WordChainBuilder({ targetWord, scrambledLetters, onAnswer, ageGroup: _ageGroup = "9-11" }: Props) {
     const [currentChain, setCurrentChain] = useState<string[]>([]);
     const [availableLetters, setAvailableLetters] = useState<string[]>(scrambledLetters);
     const [moves, setMoves] = useState(0);

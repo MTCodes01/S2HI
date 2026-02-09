@@ -15,7 +15,7 @@ type Props = {
     ageGroup?: string;
 };
 
-export default function ReadingGame({ question, options, correctOption, onAnswer, ageGroup = "9-11" }: Props) {
+export default function ReadingGame({ question, options, correctOption, onAnswer, ageGroup: _ageGroup = "9-11" }: Props) {
     const startTime = useRef<number>(Date.now());
 
     const handleClick = (option: string) => {

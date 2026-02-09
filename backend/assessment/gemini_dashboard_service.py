@@ -3,8 +3,18 @@ from google.genai import types
 from django.conf import settings
 import json
 
-# Configure API with modern client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+# Lazy client initialization - only create when needed
+_client = None
+
+def get_client():
+    """Get or create the Gemini API client"""
+    global _client
+    if _client is None:
+        api_key = settings.GEMINI_API_KEY
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not configured in settings")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 def generate_dashboard_insights(age_group, domain_patterns, prediction_data, total_questions):
     """
@@ -67,7 +77,7 @@ Keep responses brief and focused."""
         print("📤 Sending request to Gemini...")
         
         # Call Gemini with structured output
-        response = client.models.generate_content(
+        response = get_client().models.generate_content(
             model="gemini-2.0-flash-exp",
             contents=prompt,
             config=types.GenerateContentConfig(

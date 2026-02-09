@@ -14,11 +14,10 @@ type Props = {
     ageGroup?: string;
 };
 
-export default function TimeEstimator({ targetSeconds, onAnswer, ageGroup = "9-11" }: Props) {
+export default function TimeEstimator({ targetSeconds, onAnswer, ageGroup: _ageGroup = "9-11" }: Props) {
     const [isHolding, setIsHolding] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const startTime = useRef<number>(0);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleMouseDown = () => {
         if (feedback) return; // Prevent interaction during feedback

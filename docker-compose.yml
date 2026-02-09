@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: s2hi-backend
+    ports:
+      - "3001:8000"
+    volumes:
+      # Mount media directory for persistent file uploads
+      - ./backend/media:/app/media
+      # Mount database for persistence
+      - ./backend/db.sqlite3:/app/db.sqlite3
+    environment:
+      - DJANGO_SETTINGS_MODULE=ld_screening.settings
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    networks:
+      - s2hi-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: s2hi-frontend
+    ports:
+      - "3002:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - s2hi-network
+
+networks:
+  s2hi-network:
+    driver: bridge

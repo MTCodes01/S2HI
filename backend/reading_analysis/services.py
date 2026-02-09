@@ -5,8 +5,18 @@ import json
 import time
 import uuid
 
-# Configure API with modern client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+# Lazy client initialization - only create when needed
+_client = None
+
+def get_client():
+    """Get or create the Gemini API client"""
+    global _client
+    if _client is None:
+        api_key = settings.GEMINI_API_KEY
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not configured in settings")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 def analyze_audio_with_gemini(audio_path, expected_text, age_group):
     """
@@ -41,7 +51,7 @@ Analyze the audio for:
         print("🤖 Generating content with inline audio...")
         
         # 3. Send audio inline - no upload needed!
-        response = client.models.generate_content(
+        response = get_client().models.generate_content(
             model="gemini-2.0-flash-exp",
             contents=[
                 prompt,
@@ -209,7 +219,7 @@ Generate ONE sentence suitable for reading aloud practice.
         
         print("🤖 Calling Gemini to generate sentence...")
         
-        response = client.models.generate_content(
+        response = get_client().models.generate_content(
             model="gemini-2.0-flash-exp",
             contents=prompt,
             config=types.GenerateContentConfig(

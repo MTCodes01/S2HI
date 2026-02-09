@@ -14,7 +14,7 @@ type Props = {
     ageGroup?: string;
 };
 
-export default function NumberSenseDash({ left, right, onAnswer, ageGroup = "9-11" }: Props) {
+export default function NumberSenseDash({ left, right, onAnswer, ageGroup: _ageGroup = "9-11" }: Props) {
     const startTime = useRef<number>(Date.now());
 
     useEffect(() => {
