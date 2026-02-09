@@ -178,7 +178,7 @@ class GetNextQuestionView(APIView):
             )
             
             # Check if session should end (30 questions max)
-            if total_responses >= 10:
+            if total_responses >= 30:
                 return Response(
                     {
                         'message': 'Assessment complete! Generating your results...',
