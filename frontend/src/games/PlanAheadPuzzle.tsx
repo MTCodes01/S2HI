@@ -58,12 +58,9 @@ export default function PlanAheadPuzzle({ level, gridSize, onAnswer }: Props) {
         let start = -1;
         let goal = -1;
         let pathDist = -1;
-        let attempts = 0;
 
+        // Keep trying until we get a valid puzzle with a solvable path
         while (pathDist === -1 || pathDist < level * 3) {
-            attempts++;
-            if (attempts > 50) break; // Safety
-
             newGrid = new Array(size).fill(0);
 
             // Random start and goal (usually opposite sides)
@@ -73,9 +70,9 @@ export default function PlanAheadPuzzle({ level, gridSize, onAnswer }: Props) {
             newGrid[start] = 1;
             newGrid[goal] = 3;
 
-            // Add obstacles (25% coverage)
+            // Add obstacles (20% coverage for better path generation)
             for (let i = 0; i < size; i++) {
-                if (i !== start && i !== goal && Math.random() < 0.25) {
+                if (i !== start && i !== goal && Math.random() < 0.20) {
                     newGrid[i] = 2;
                 }
             }
